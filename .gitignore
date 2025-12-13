@@ -1,0 +1,46 @@
+# Godot 4+ specific ignores
+.godot/
+
+# Godot-specific ignores
+*.translation
+
+# Imported translations
+*.import
+
+# C# / Mono ignores
+.mono/
+data_*/
+mono_crash.*.json
+
+# .NET / C# build outputs
+bin/
+obj/
+*.csproj.user
+
+# IDE specific
+.vs/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.idea/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# NuGet packages
+packages/
+*.nupkg
+
+# Local history
+.localhistory/
+
+# Logs
+*.log
