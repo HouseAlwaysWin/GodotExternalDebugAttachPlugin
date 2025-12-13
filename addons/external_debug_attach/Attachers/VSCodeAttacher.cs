@@ -22,10 +22,20 @@ public class VSCodeAttacher : IIdeAttacher
                 return AttachResult.Fail($"VS Code executable not found at: {idePath}");
             }
 
-            // Get workspace path (directory containing the solution)
-            var workspacePath = string.IsNullOrEmpty(solutionPath)
-                ? ProjectSettings.GlobalizePath("res://")
-                : Path.GetDirectoryName(solutionPath);
+            // Get workspace path - prefer solution directory, fallback to project path
+            var projectPath = ProjectSettings.GlobalizePath("res://");
+            string workspacePath;
+
+            if (!string.IsNullOrEmpty(solutionPath) && File.Exists(solutionPath))
+            {
+                workspacePath = Path.GetDirectoryName(solutionPath) ?? projectPath;
+            }
+            else
+            {
+                workspacePath = projectPath;
+            }
+
+            GD.Print($"[VSCodeAttacher] Workspace path: {workspacePath}");
 
             if (string.IsNullOrEmpty(workspacePath))
             {

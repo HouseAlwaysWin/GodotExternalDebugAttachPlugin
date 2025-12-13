@@ -31,6 +31,8 @@ public static class ProcessScanner
 
             GD.Print($"[ProcessScanner] Found {godotProcesses.Count} Godot processes");
 
+            // First pass: Look for process with --remote-debug (this is the game process)
+            // Note: Game process has --remote-debug and --editor-pid, but NOT standalone --editor flag
             foreach (var process in godotProcesses)
             {
                 try
@@ -38,8 +40,30 @@ public static class ProcessScanner
                     var commandLine = GetCommandLine(process.Id);
                     GD.Print($"[ProcessScanner] PID {process.Id}: {commandLine}");
 
-                    // Skip the editor process (check if it's not using --editor flag)
-                    if (commandLine.Contains("--editor") || commandLine.Contains("-e"))
+                    // Game process uses --remote-debug. Check that it's NOT the editor.
+                    // Editor has " --editor" flag, game has "--editor-pid" (different!)
+                    if (commandLine.Contains("--remote-debug"))
+                    {
+                        // This is the game process - it has --remote-debug
+                        GD.Print($"[ProcessScanner] Found game process (--remote-debug): PID {process.Id}");
+                        return process.Id;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    GD.Print($"[ProcessScanner] Error checking process {process.Id}: {ex.Message}");
+                }
+            }
+
+            // Second pass: Look for non-editor process running our project
+            foreach (var process in godotProcesses)
+            {
+                try
+                {
+                    var commandLine = GetCommandLine(process.Id);
+
+                    // Skip the editor process (use stricter check: " --editor" or " -e " with spaces)
+                    if (IsEditorCommandLine(commandLine))
                     {
                         continue;
                     }
@@ -60,7 +84,7 @@ public static class ProcessScanner
             // Fallback: return the most recent non-editor Godot process
             var recentProcess = godotProcesses
                 .Where(p => !IsEditorProcess(p))
-                .OrderByDescending(p => p.StartTime)
+                .OrderByDescending(p => GetProcessStartTimeSafe(p))
                 .FirstOrDefault();
 
             if (recentProcess != null)
@@ -75,6 +99,40 @@ public static class ProcessScanner
         }
 
         return -1;
+    }
+
+    /// <summary>
+    /// Check if command line indicates this is the editor process
+    /// </summary>
+    private static bool IsEditorCommandLine(string commandLine)
+    {
+        // Check for explicit --editor flag
+        if (commandLine.Contains(" --editor") || commandLine.Contains("--editor "))
+        {
+            return true;
+        }
+        // Check for -e flag with proper boundaries (not part of path)
+        // Look for " -e " or " -e\n" or end with " -e"
+        if (commandLine.Contains(" -e ") || commandLine.EndsWith(" -e") || commandLine.Contains(" -e\t"))
+        {
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Get process start time safely
+    /// </summary>
+    private static DateTime GetProcessStartTimeSafe(Process process)
+    {
+        try
+        {
+            return process.StartTime;
+        }
+        catch
+        {
+            return DateTime.MinValue;
+        }
     }
 
     /// <summary>

@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="External Debug Attach Plugin Demo"
-config/features=PackedStringArray("4.2", "C#")
+config/features=PackedStringArray("4.5", "C#")
 config/icon="res://icon.svg"
 
 [dotnet]
