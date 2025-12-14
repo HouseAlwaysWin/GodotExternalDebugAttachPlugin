@@ -36,19 +36,11 @@ public class SettingsManager
     /// </summary>
     public void InitializeSettings()
     {
-        // IDE Type
-        if (!_editorSettings.HasSetting(SettingIdeType))
-        {
-            _editorSettings.SetSetting(SettingIdeType, (int)IdeType.VSCode);
-        }
-        AddSettingInfo(SettingIdeType, Variant.Type.Int, PropertyHint.Enum, "VSCode");
+        // IDE Type - Removed from UI since we only support VSCode for now
+        // if (!_editorSettings.HasSetting(SettingIdeType)) ...
 
-        // IDE Path
-        if (!_editorSettings.HasSetting(SettingIdePath))
-        {
-            _editorSettings.SetSetting(SettingIdePath, "");
-        }
-        AddSettingInfo(SettingIdePath, Variant.Type.String, PropertyHint.GlobalFile, "*.exe");
+        // IDE Path - Removed from UI, will auto-detect
+        // if (!_editorSettings.HasSetting(SettingIdePath)) ...
 
         // Attach Delay
         if (!_editorSettings.HasSetting(SettingAttachDelayMs))
@@ -57,12 +49,8 @@ public class SettingsManager
         }
         AddSettingInfo(SettingAttachDelayMs, Variant.Type.Int, PropertyHint.Range, "100,5000,100");
 
-        // Solution Path
-        if (!_editorSettings.HasSetting(SettingSolutionPath))
-        {
-            _editorSettings.SetSetting(SettingSolutionPath, DetectSolutionPath());
-        }
-        AddSettingInfo(SettingSolutionPath, Variant.Type.String, PropertyHint.GlobalFile, "*.sln");
+        // Solution Path - Removed from UI, will auto-detect
+        // if (!_editorSettings.HasSetting(SettingSolutionPath)) ...
     }
 
     private void AddSettingInfo(string name, Variant.Type type, PropertyHint hint, string hintString)
@@ -82,8 +70,8 @@ public class SettingsManager
     /// </summary>
     public IdeType GetIdeType()
     {
-        var value = _editorSettings.GetSetting(SettingIdeType);
-        return (IdeType)(int)value;
+        // Hardcoded to VSCode as Rider support is temporarily disabled
+        return IdeType.VSCode;
     }
 
     /// <summary>
@@ -91,21 +79,8 @@ public class SettingsManager
     /// </summary>
     public string GetIdePath()
     {
-        var path = (string)_editorSettings.GetSetting(SettingIdePath);
-
-        if (string.IsNullOrEmpty(path))
-        {
-            // Auto-detect based on IDE type
-            var ideType = GetIdeType();
-            path = ideType switch
-            {
-                // IdeType.Rider => DetectRiderPath(),
-                IdeType.VSCode => DetectVSCodePath(),
-                _ => ""
-            };
-        }
-
-        return path;
+        // Always auto-detect for now
+        return DetectVSCodePath();
     }
 
     /// <summary>
@@ -121,14 +96,8 @@ public class SettingsManager
     /// </summary>
     public string GetSolutionPath()
     {
-        var path = (string)_editorSettings.GetSetting(SettingSolutionPath);
-
-        if (string.IsNullOrEmpty(path))
-        {
-            path = DetectSolutionPath();
-        }
-
-        return path;
+        // Always auto-detect .sln file
+        return DetectSolutionPath();
     }
 
     /// <summary>

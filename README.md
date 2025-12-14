@@ -25,10 +25,7 @@ Go to **Editor** → **Editor Settings** and find the "External Debug Attach" se
 
 | Setting | Description |
 |---------|-------------|
-| IDE Type | Choose your IDE: `VSCode` |
-| IDE Path | Path to the IDE executable (leave empty to auto-detect) |
 | Attach Delay Ms | Delay before attaching (in milliseconds) |
-| Solution Path | Path to the .sln file (leave empty to auto-detect) |
 
 ## Usage
 

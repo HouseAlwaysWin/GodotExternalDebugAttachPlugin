@@ -25,10 +25,7 @@
 
 | 設定項 | 說明 |
 |--------|------|
-| IDE Type | 選擇 IDE 類型：VSCode |
-| IDE Path | IDE 可執行檔路徑（留空自動偵測） |
 | Attach Delay Ms | Attach 前的等待時間（毫秒） |
-| Solution Path | .sln 檔案路徑（留空自動偵測） |
 
 ## 使用方法
 
