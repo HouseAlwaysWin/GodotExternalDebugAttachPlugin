@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using Godot;
 
@@ -52,21 +53,93 @@ public class VSCodeAttacher : IIdeAttacher
 
             GD.Print($"[VSCodeAttacher] Created launch.json at: {launchJsonPath}");
 
-            // Open VS Code with the workspace
-            var arguments = $"\"{workspacePath}\"";
+            // Record current VS Code processes before launching
+            var existingCodePids = Process.GetProcessesByName("Code")
+                .Select(p => p.Id)
+                .ToHashSet();
 
-            GD.Print($"[VSCodeAttacher] Executing: \"{idePath}\" {arguments}");
+            // Step 1: Open VS Code with the workspace
+            var openArgs = $"\"{workspacePath}\" --reuse-window";
+            GD.Print($"[VSCodeAttacher] Opening workspace: \"{idePath}\" {openArgs}");
 
-            var startInfo = new ProcessStartInfo
+            var openProcess = new ProcessStartInfo
             {
                 FileName = idePath,
-                Arguments = arguments,
+                Arguments = openArgs,
                 UseShellExecute = true
             };
+            Process.Start(openProcess);
 
-            Process.Start(startInfo);
+            // Step 2: Wait for VS Code to be ready (new process or window ready)
+            GD.Print("[VSCodeAttacher] Waiting for VS Code to be ready...");
 
-            GD.Print("[VSCodeAttacher] VS Code launched. Please start the '.NET Attach' debug configuration manually.");
+            int waitedMs = 0;
+            int maxWaitMs = 15000; // Max 15 seconds
+            int intervalMs = 500;
+            Process? codeProcess = null;
+
+            while (waitedMs < maxWaitMs)
+            {
+                System.Threading.Thread.Sleep(intervalMs);
+                waitedMs += intervalMs;
+
+                // Check if there's a VS Code process running
+                var codeProcesses = Process.GetProcessesByName("Code");
+                if (codeProcesses.Length > 0)
+                {
+                    // Prefer a new process, otherwise use any existing one
+                    codeProcess = codeProcesses
+                        .FirstOrDefault(p => !existingCodePids.Contains(p.Id))
+                        ?? codeProcesses.First();
+
+                    // Wait a bit more for VS Code to fully load
+                    if (waitedMs >= 3000)
+                    {
+                        GD.Print($"[VSCodeAttacher] VS Code ready after {waitedMs}ms (PID: {codeProcess.Id})");
+                        break;
+                    }
+                }
+            }
+
+            if (codeProcess == null)
+            {
+                GD.PrintErr("[VSCodeAttacher] VS Code process not found after waiting");
+                GD.Print("[VSCodeAttacher] Please press F5 in VS Code manually to start debugging.");
+                return AttachResult.Ok();
+            }
+
+            // Step 3: Send F5 keypress to VS Code using PowerShell
+            GD.Print("[VSCodeAttacher] Sending F5 keypress to start debugging...");
+
+            try
+            {
+                // Use AppActivate with process ID for reliable window activation
+                var psCommand = $"Add-Type -AssemblyName Microsoft.VisualBasic; " +
+                    $"[Microsoft.VisualBasic.Interaction]::AppActivate({codeProcess.Id}); " +
+                    "Start-Sleep -Milliseconds 1000; " +
+                    "Add-Type -AssemblyName System.Windows.Forms; " +
+                    "[System.Windows.Forms.SendKeys]::SendWait('{F5}')";
+
+                var psProcess = new ProcessStartInfo
+                {
+                    FileName = "powershell",
+                    Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{psCommand}\"",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                };
+
+                using var ps = Process.Start(psProcess);
+                ps?.WaitForExit(10000);
+
+                GD.Print("[VSCodeAttacher] F5 keypress sent to VS Code.");
+            }
+            catch (Exception ex)
+            {
+                GD.Print($"[VSCodeAttacher] Could not send F5 keystroke: {ex.Message}");
+                GD.Print("[VSCodeAttacher] Please press F5 in VS Code manually to start debugging.");
+            }
 
             return AttachResult.Ok();
         }

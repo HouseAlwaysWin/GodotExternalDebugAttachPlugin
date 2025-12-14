@@ -43,7 +43,7 @@ public partial class ExternalDebugAttachPlugin : EditorPlugin
         }
     }
 
-    private async void OnAttachButtonPressed()
+    private void OnAttachButtonPressed()
     {
         GD.Print("[ExternalDebugAttach] Run + Attach Debug triggered");
 
@@ -56,7 +56,7 @@ public partial class ExternalDebugAttachPlugin : EditorPlugin
                 return;
             }
 
-            // Step 1: Get settings
+            // Step 1: Get settings (capture values before any async operations)
             var ideType = _settingsManager.GetIdeType();
             var idePath = _settingsManager.GetIdePath();
             var attachDelayMs = _settingsManager.GetAttachDelayMs();
@@ -68,36 +68,48 @@ public partial class ExternalDebugAttachPlugin : EditorPlugin
             EditorInterface.Singleton.PlayMainScene();
             GD.Print("[ExternalDebugAttach] Project started");
 
-            // Step 3: Wait for attach delay
-            await ToSignal(GetTree().CreateTimer(attachDelayMs / 1000.0), SceneTreeTimer.SignalName.Timeout);
-
-            // Step 4: Find the Godot process PID
-            var pid = ProcessScanner.FindGodotProcessPid();
-            if (pid == -1)
+            // Step 3-5: Run attach process in background thread to avoid blocking
+            // and to prevent delegate invalidation issues
+            System.Threading.Tasks.Task.Run(() =>
             {
-                ShowError("Failed to find Godot process PID");
-                return;
-            }
-            GD.Print($"[ExternalDebugAttach] Found PID: {pid}");
+                try
+                {
+                    // Wait for attach delay
+                    System.Threading.Thread.Sleep(attachDelayMs);
 
-            // Step 5: Attach debugger
-            IIdeAttacher attacher = ideType switch
-            {
-                IdeType.Rider => new RiderAttacher(),
-                IdeType.VSCode => new VSCodeAttacher(),
-                _ => throw new NotSupportedException($"IDE type {ideType} is not supported")
-            };
+                    // Find the Godot process PID
+                    var pid = ProcessScanner.FindGodotProcessPid();
+                    if (pid == -1)
+                    {
+                        GD.PrintErr("[ExternalDebugAttach] Failed to find Godot process PID");
+                        return;
+                    }
+                    GD.Print($"[ExternalDebugAttach] Found PID: {pid}");
 
-            var result = attacher.Attach(pid, idePath, solutionPath);
+                    // Attach debugger
+                    IIdeAttacher attacher = ideType switch
+                    {
+                        IdeType.Rider => new RiderAttacher(),
+                        IdeType.VSCode => new VSCodeAttacher(),
+                        _ => throw new NotSupportedException($"IDE type {ideType} is not supported")
+                    };
 
-            if (result.Success)
-            {
-                ShowNotification($"Successfully attached {ideType} to PID {pid}");
-            }
-            else
-            {
-                ShowError($"Failed to attach: {result.ErrorMessage}");
-            }
+                    var result = attacher.Attach(pid, idePath, solutionPath);
+
+                    if (result.Success)
+                    {
+                        GD.Print($"[ExternalDebugAttach] Successfully attached {ideType} to PID {pid}");
+                    }
+                    else
+                    {
+                        GD.PrintErr($"[ExternalDebugAttach] Failed to attach: {result.ErrorMessage}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    GD.PrintErr($"[ExternalDebugAttach] Background task error: {ex.Message}");
+                }
+            });
         }
         catch (Exception ex)
         {
