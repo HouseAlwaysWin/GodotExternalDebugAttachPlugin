@@ -38,7 +38,7 @@
 ### VS Code
 - 自動生成 `.vscode/launch.json`
 - 需要安裝 C# 擴充套件
-- 開啟 VS Code 後需手動啟動 debug 配置
+- 自動發送 F5 開始除錯
 
 ## 常見問題
 
@@ -54,3 +54,8 @@
 ### VS Code 無法附加
 - 確認已安裝 C# 擴充套件
 - 在 VS Code 中手動選擇 ".NET Attach (Godot)" 配置
+
+## 已知限制
+
+- **每次 debug 結束後需重啟 Godot**：由於 [Godot #78513](https://github.com/godotengine/godot/issues/78513) bug，debug session 結束後需重啟編輯器才能再次使用 plugin。
+- **僅支援 Windows**：目前使用 WMI 進行程序偵測，僅支援 Windows 平台。
