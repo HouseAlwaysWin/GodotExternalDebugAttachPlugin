@@ -21,26 +21,82 @@ public partial class ExternalDebugAttachPlugin : EditorPlugin
         _settingsManager = new SettingsManager();
         _settingsManager.InitializeSettings();
 
-        // Create and add toolbar button
+        // Create and add toolbar button with icon
         _attachButton = new Button();
-        _attachButton.Text = "▶ Run + Attach Debug";
-        _attachButton.TooltipText = "Run project and attach external debugger";
+        _attachButton.TooltipText = "Run + Attach Debug (Alt+F5)";
         _attachButton.Pressed += OnAttachButtonPressed;
 
+        // Load and set button icon (SVG for better quality)
+        var iconPath = "res://addons/external_debug_attach/attach_icon.svg";
+        var icon = GD.Load<Texture2D>(iconPath);
+        if (icon != null)
+        {
+            _attachButton.Icon = icon;
+        }
+        else
+        {
+            // Fallback to text if icon not found
+            _attachButton.Text = "▶ Attach";
+        }
+
         AddControlToContainer(CustomControlContainer.Toolbar, _attachButton);
+
+        // Auto-register DebugWaitAutoload
+        RegisterDebugWaitAutoload();
+
+        // Register keyboard shortcut (Ctrl+Alt+D)
+        RegisterShortcut();
+    }
+
+    private void RegisterShortcut()
+    {
+        var shortcut = new Shortcut();
+        var inputEvent = new InputEventKey();
+        inputEvent.Keycode = Key.F5;
+        inputEvent.AltPressed = true;
+        shortcut.Events = new Godot.Collections.Array { inputEvent };
+
+        _attachButton!.Shortcut = shortcut;
+        _attachButton.ShortcutInTooltip = true;
+        GD.Print("[ExternalDebugAttach] Registered shortcut: Alt+F5");
     }
 
     public override void _ExitTree()
     {
-        GD.Print("[ExternalDebugAttach] Plugin unloaded");
+        GD.Print("[ExternalDebugAttach] Plugin unloading...");
 
-        // Clean up
+        // Clean up - unsubscribe event FIRST to prevent delegate errors
         if (_attachButton != null)
         {
+            try
+            {
+                _attachButton.Pressed -= OnAttachButtonPressed;
+            }
+            catch
+            {
+                // Delegate error detected - show restart reminder
+                ShowRestartReminder();
+            }
+
             RemoveControlFromContainer(CustomControlContainer.Toolbar, _attachButton);
             _attachButton.QueueFree();
             _attachButton = null;
         }
+
+        // Unregister autoload when plugin is disabled
+        UnregisterDebugWaitAutoload();
+
+        GD.Print("[ExternalDebugAttach] Plugin unloaded");
+    }
+
+    private void ShowRestartReminder()
+    {
+        var dialog = new AcceptDialog();
+        dialog.Title = "External Debug Attach";
+        dialog.DialogText = "偵測到 .NET 程式集重載錯誤。\n\n請重新啟動 Godot 編輯器以確保 plugin 正常運作。\n\n(This is a known Godot bug #78513)";
+        dialog.OkButtonText = "OK";
+        EditorInterface.Singleton.GetBaseControl().AddChild(dialog);
+        dialog.PopupCentered();
     }
 
     private void OnAttachButtonPressed()
@@ -128,5 +184,37 @@ public partial class ExternalDebugAttachPlugin : EditorPlugin
     {
         GD.PrintErr($"[ExternalDebugAttach] {message}");
         // TODO: Show error dialog in editor
+    }
+
+    private const string AutoloadName = "DebugWait";
+    private const string AutoloadPath = "res://addons/external_debug_attach/DebugWaitAutoload.cs";
+
+    private void RegisterDebugWaitAutoload()
+    {
+        // Check if already registered
+        if (ProjectSettings.HasSetting($"autoload/{AutoloadName}"))
+        {
+            GD.Print($"[ExternalDebugAttach] Autoload '{AutoloadName}' already registered");
+            return;
+        }
+
+        // Register the autoload
+        ProjectSettings.SetSetting($"autoload/{AutoloadName}", AutoloadPath);
+        ProjectSettings.Save();
+        GD.Print($"[ExternalDebugAttach] Registered autoload '{AutoloadName}'");
+    }
+
+    private void UnregisterDebugWaitAutoload()
+    {
+        // Check if registered
+        if (!ProjectSettings.HasSetting($"autoload/{AutoloadName}"))
+        {
+            return;
+        }
+
+        // Remove the autoload
+        ProjectSettings.SetSetting($"autoload/{AutoloadName}", new Variant());
+        ProjectSettings.Save();
+        GD.Print($"[ExternalDebugAttach] Unregistered autoload '{AutoloadName}'");
     }
 }

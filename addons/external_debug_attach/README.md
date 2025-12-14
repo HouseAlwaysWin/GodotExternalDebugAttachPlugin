@@ -1,5 +1,20 @@
 # External Debug Attach Plugin
 
+One-click Run + Attach Debug to external IDE (Rider / VS Code) for Godot Editor.
+
+A Godot Editor plugin that automatically launches your game and attaches the debugger from your external IDE with a single button click. Supports JetBrains Rider and Visual Studio Code.
+
+## Features
+
+- 🚀 One-click to run game and attach debugger
+- 🔧 Supports Rider and VS Code
+- ⏳ Optional wait for debugger (never miss initialization breakpoints)
+- 🎯 Auto-detect IDE and solution paths
+
+---
+
+# 中文說明
+
 一鍵 Run + Attach Debug 到外部 IDE（Rider / VS Code）的 Godot Editor Plugin。
 
 ## 安裝

@@ -1,0 +1,20 @@
+name: Publish to Godot Asset Library
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Publish to Godot Asset Library
+        uses: vokimon/godot-asset-library-client@v2.0.2
+        with:
+          username: ${{ secrets.GODOT_ASSET_LIB_USER }}
+          password: ${{ secrets.GODOT_ASSET_LIB_PASSWORD }}
+          # asset_id: ${{ secrets.ASSET_ID }} # Uncomment this line after your first manual submission to update existing asset
+          base_url: https://godotengine.org/asset-library/api/

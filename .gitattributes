@@ -1,0 +1,9 @@
+# Asset Library export configuration
+# Only include the addons folder when downloaded from Asset Library
+
+# Exclude everything except addons
+/* export-ignore
+/addons export-ignore
+
+# Explicitly include the plugin folder
+!/addons/external_debug_attach/** -export-ignore
