@@ -1,4 +1,5 @@
 using Godot;
+using System;
 using System.IO;
 using SysEnv = System.Environment;
 
@@ -101,7 +102,7 @@ public class SettingsManager
     }
 
     /// <summary>
-    /// Auto-detect .sln file in project directory
+    /// Auto-detect .sln file in project directory, or create one if .csproj exists
     /// </summary>
     private string DetectSolutionPath()
     {
@@ -113,7 +114,54 @@ public class SettingsManager
             return slnFiles[0];
         }
 
+        // If no .sln found, look for .csproj
+        var csprojFiles = Directory.GetFiles(projectPath, "*.csproj");
+        if (csprojFiles.Length > 0)
+        {
+            var csprojPath = csprojFiles[0];
+            var projectName = Path.GetFileNameWithoutExtension(csprojPath);
+
+            GD.Print($"[ExternalDebugAttach] No solution found. Generating '{projectName}.sln'...");
+
+            try
+            {
+                // Create new solution
+                RunDotnetCommand("new sln -n \"" + projectName + "\"", projectPath);
+
+                // Add project to solution
+                RunDotnetCommand("sln add \"" + Path.GetFileName(csprojPath) + "\"", projectPath);
+
+                var newSlnPath = Path.Combine(projectPath, projectName + ".sln");
+                if (File.Exists(newSlnPath))
+                {
+                    GD.Print($"[ExternalDebugAttach] Generated solution: {newSlnPath}");
+                    return newSlnPath;
+                }
+            }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"[ExternalDebugAttach] Failed to generate solution: {ex.Message}");
+            }
+        }
+
         return "";
+    }
+
+    private void RunDotnetCommand(string arguments, string workingDirectory)
+    {
+        var startInfo = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "dotnet",
+            Arguments = arguments,
+            WorkingDirectory = workingDirectory,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = System.Diagnostics.Process.Start(startInfo);
+        process?.WaitForExit();
     }
 
     /// <summary>
