@@ -217,7 +217,44 @@ public class SettingsManager
     /// </summary>
     private string DetectVSCodePath()
     {
-        // Common VS Code paths on Windows
+        // 1. Check PATH environment variable for "code.cmd" or "code.exe"
+        var pathEnv = SysEnv.GetEnvironmentVariable("PATH") ?? "";
+        var paths = pathEnv.Split(Path.PathSeparator);
+
+        foreach (var p in paths)
+        {
+            try
+            {
+                var fullPath = Path.Combine(p.Trim(), "code.cmd");
+                if (File.Exists(fullPath))
+                {
+                    // code.cmd usually points to bin folder, we need the exe in the parent/root usually, 
+                    // or we can use the exe if found in the same folder. 
+                    // However, users often have "Code.exe" in the main installation folder.
+                    // Let's look for "Code.exe" in the parent folder of "bin" if code.cmd is in "bin"
+
+                    // Standard VS Code structure:
+                    // .../Microsoft VS Code/Code.exe
+                    // .../Microsoft VS Code/bin/code.cmd
+
+                    var binDir = Path.GetDirectoryName(fullPath);
+                    var installDir = Directory.GetParent(binDir)?.FullName;
+
+                    if (installDir != null)
+                    {
+                        var exePath = Path.Combine(installDir, "Code.exe");
+                        if (File.Exists(exePath)) return exePath;
+                    }
+                }
+
+                // Also check for Code.exe directly in PATH (less common but possible)
+                var directExe = Path.Combine(p.Trim(), "Code.exe");
+                if (File.Exists(directExe)) return directExe;
+            }
+            catch { }
+        }
+
+        // 2. Common VS Code paths on Windows
         string[] possiblePaths =
         {
             Path.Combine(SysEnv.GetFolderPath(SysEnv.SpecialFolder.LocalApplicationData),
