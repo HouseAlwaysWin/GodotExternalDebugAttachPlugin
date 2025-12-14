@@ -29,7 +29,6 @@
 | VS Code Path | VS Code 可執行檔路徑（留空自動偵測） |
 | Cursor Path | Cursor 可執行檔路徑（留空自動偵測） |
 | AntiGravity Path | AntiGravity 可執行檔路徑（留空自動偵測） |
-| Attach Delay Ms | Attach 前的等待時間（毫秒） |
 
 ## 使用方法
 
@@ -71,7 +70,7 @@
 
 ### 找不到 PID
 - 確認專案已使用 C# 建置
-- 增加 Attach Delay 時間
+- Plugin 會自動重試最多 10 次
 
 ### IDE 無法附加
 - 確認已安裝 C# 擴充套件

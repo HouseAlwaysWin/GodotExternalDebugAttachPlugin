@@ -1,5 +1,8 @@
 using Godot;
 using System;
+using System.Runtime.InteropServices;
+using System.Runtime.Loader;
+using System.Reflection;
 
 namespace ExternalDebugAttach;
 
@@ -10,6 +13,7 @@ namespace ExternalDebugAttach;
 public partial class ExternalDebugAttachLogic : RefCounted
 {
     private SettingsManager? _settingsManager;
+    private GCHandle _handle;
 
     /// <summary>
     /// Initialize the plugin logic
@@ -17,6 +21,17 @@ public partial class ExternalDebugAttachLogic : RefCounted
     public void Initialize()
     {
         GD.Print("[ExternalDebugAttach] C# logic initializing...");
+
+        // Block unloading with a strong handle (workaround for Godot issue #78513)
+        _handle = GCHandle.Alloc(this);
+
+        // Register cleanup code to prevent unloading issues
+        var loadContext = AssemblyLoadContext.GetLoadContext(Assembly.GetExecutingAssembly());
+        if (loadContext != null)
+        {
+            loadContext.Unloading += OnAssemblyUnloading;
+            GD.Print("[ExternalDebugAttach] Registered assembly unload handler");
+        }
 
         _settingsManager = new SettingsManager();
         _settingsManager.InitializeSettings();
@@ -28,11 +43,36 @@ public partial class ExternalDebugAttachLogic : RefCounted
     }
 
     /// <summary>
+    /// Called when assembly is being unloaded - cleanup to prevent issues
+    /// </summary>
+    private void OnAssemblyUnloading(AssemblyLoadContext context)
+    {
+        GD.Print("[ExternalDebugAttach] Assembly unloading - performing cleanup...");
+
+        // Free the GCHandle to allow proper unloading
+        if (_handle.IsAllocated)
+        {
+            _handle.Free();
+            GD.Print("[ExternalDebugAttach] GCHandle freed");
+        }
+
+        // Cleanup resources
+        _settingsManager?.Cleanup();
+        _settingsManager = null;
+    }
+
+    /// <summary>
     /// Cleanup when plugin is disabled
     /// </summary>
     public void Cleanup()
     {
         GD.Print("[ExternalDebugAttach] C# logic cleaning up...");
+
+        // Free GCHandle if still allocated
+        if (_handle.IsAllocated)
+        {
+            _handle.Free();
+        }
 
         _settingsManager?.Cleanup();
         UnregisterDebugWaitAutoload();
@@ -58,7 +98,6 @@ public partial class ExternalDebugAttachLogic : RefCounted
             // Step 1: Get settings
             var ideType = _settingsManager.GetIdeType();
             var idePath = _settingsManager.GetIdePath();
-            var attachDelayMs = _settingsManager.GetAttachDelayMs();
             var solutionPath = _settingsManager.GetSolutionPath();
 
             GD.Print($"[ExternalDebugAttach] IDE Type: {ideType}, Path: {idePath}");
@@ -72,12 +111,26 @@ public partial class ExternalDebugAttachLogic : RefCounted
             {
                 try
                 {
-                    System.Threading.Thread.Sleep(attachDelayMs);
-
+                    // Try to find PID immediately, poll if not found
                     var pid = ProcessScanner.FindGodotProcessPid();
+
+                    // If not found immediately, poll with retries
                     if (pid == -1)
                     {
-                        GD.PrintErr("[ExternalDebugAttach] Failed to find Godot process PID");
+                        const int maxRetries = 10;
+                        const int retryDelayMs = 300;
+
+                        for (int i = 0; i < maxRetries && pid == -1; i++)
+                        {
+                            GD.Print($"[ExternalDebugAttach] Process not found, retrying... ({i + 1}/{maxRetries})");
+                            System.Threading.Thread.Sleep(retryDelayMs);
+                            pid = ProcessScanner.FindGodotProcessPid();
+                        }
+                    }
+
+                    if (pid == -1)
+                    {
+                        GD.PrintErr("[ExternalDebugAttach] Failed to find Godot process PID after retries");
                         return;
                     }
                     GD.Print($"[ExternalDebugAttach] Found PID: {pid}");

@@ -26,7 +26,7 @@ public class SettingsManager
     private const string SettingVSCodePath = SettingPrefix + "vscode_path";
     private const string SettingCursorPath = SettingPrefix + "cursor_path";
     private const string SettingAntiGravityPath = SettingPrefix + "antigravity_path";
-    private const string SettingAttachDelayMs = SettingPrefix + "attach_delay_ms";
+
 
     // Deprecated settings (for cleanup)
     private const string SettingIdePath = SettingPrefix + "ide_path";
@@ -77,12 +77,7 @@ public class SettingsManager
         }
         AddSettingInfo(SettingAntiGravityPath, Variant.Type.String, PropertyHint.GlobalFile, "*.exe");
 
-        // Attach Delay
-        if (!_editorSettings.HasSetting(SettingAttachDelayMs))
-        {
-            _editorSettings.SetSetting(SettingAttachDelayMs, 1000);
-        }
-        AddSettingInfo(SettingAttachDelayMs, Variant.Type.Int, PropertyHint.Range, "100,5000,100");
+
 
         // Store the initial IDE type for change detection
         _previousIdeType = GetIdeType();
@@ -215,13 +210,7 @@ public class SettingsManager
         }
     }
 
-    /// <summary>
-    /// Get the attach delay in milliseconds
-    /// </summary>
-    public int GetAttachDelayMs()
-    {
-        return (int)_editorSettings.GetSetting(SettingAttachDelayMs);
-    }
+
 
     /// <summary>
     /// Get the solution/workspace path

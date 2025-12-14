@@ -29,7 +29,6 @@ Go to **Editor** → **Editor Settings** and find the "External Debug Attach" se
 | VS Code Path | Path to VS Code executable (leave empty to auto-detect) |
 | Cursor Path | Path to Cursor executable (leave empty to auto-detect) |
 | AntiGravity Path | Path to AntiGravity executable (leave empty to auto-detect) |
-| Attach Delay Ms | Delay before attaching (in milliseconds) |
 
 ## Usage
 
