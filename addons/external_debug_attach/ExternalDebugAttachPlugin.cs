@@ -145,7 +145,7 @@ public partial class ExternalDebugAttachPlugin : EditorPlugin
                     // Attach debugger
                     IIdeAttacher attacher = ideType switch
                     {
-                        IdeType.Rider => new RiderAttacher(),
+                        // IdeType.Rider => new RiderAttacher(),
                         IdeType.VSCode => new VSCodeAttacher(),
                         _ => throw new NotSupportedException($"IDE type {ideType} is not supported")
                     };

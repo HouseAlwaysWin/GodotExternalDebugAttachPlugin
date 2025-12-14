@@ -2,12 +2,12 @@
 
 [English](README.md) | **中文**
 
-一鍵 Run + Attach Debug 到外部 IDE（Rider / VS Code）的 Godot Editor Plugin。
+一鍵 Run + Attach Debug 到外部 IDE（VS Code）的 Godot Editor Plugin。
 
 ## 特色
 
 - 🚀 一鍵執行遊戲並附加 Debugger
-- 🔧 支援 Rider 和 VS Code
+- 🔧 支援 VS Code
 - ⏳ 可選的等待 Debugger 功能（確保不錯過初始化斷點）
 - 🎯 自動偵測 IDE 和 Solution 路徑
 - ⌨️ 快捷鍵支援：**Alt+F5**
@@ -25,7 +25,7 @@
 
 | 設定項 | 說明 |
 |--------|------|
-| IDE Type | 選擇 IDE 類型：Rider 或 VSCode |
+| IDE Type | 選擇 IDE 類型：VSCode |
 | IDE Path | IDE 可執行檔路徑（留空自動偵測） |
 | Attach Delay Ms | Attach 前的等待時間（毫秒） |
 | Solution Path | .sln 檔案路徑（留空自動偵測） |
@@ -53,10 +53,6 @@
 
 ## IDE 支援
 
-### Rider
-- 使用 `rider attach-to-process netcore <pid> <solution>` 命令
-- 需要 Rider 2020.1 或更新版本
-
 ### VS Code
 - 自動生成 `.vscode/launch.json`
 - 需要安裝 C# 擴充套件
@@ -67,11 +63,6 @@
 ### 找不到 PID
 - 確認專案已使用 C# 建置
 - 增加 Attach Delay 時間
-
-### Rider 無法附加
-- 確認 Rider 路徑正確
-- 確認 .sln 路徑正確
-- 查看 Godot 編輯器 Console 的錯誤訊息
 
 ### VS Code 無法附加
 - 確認已安裝 C# 擴充套件

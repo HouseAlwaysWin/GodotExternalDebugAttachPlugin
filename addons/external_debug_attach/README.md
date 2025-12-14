@@ -2,12 +2,12 @@
 
 **English** | [中文](README_zh_CN.md)
 
-One-click Run + Attach Debug to external IDE (Rider / VS Code) for Godot Editor.
+One-click Run + Attach Debug to external IDE (VS Code) for Godot Editor.
 
 ## Features
 
 - 🚀 One-click to run game and attach debugger
-- 🔧 Supports JetBrains Rider and Visual Studio Code
+- 🔧 Supports Visual Studio Code
 - ⏳ Optional wait for debugger (never miss initialization breakpoints using Autoload)
 - 🎯 Auto-detect IDE and solution paths
 - ⌨️ Keyboard shortcut support: **Alt+F5**
@@ -25,7 +25,7 @@ Go to **Editor** → **Editor Settings** and find the "External Debug Attach" se
 
 | Setting | Description |
 |---------|-------------|
-| IDE Type | Choose your IDE: `Rider` or `VSCode` |
+| IDE Type | Choose your IDE: `VSCode` |
 | IDE Path | Path to the IDE executable (leave empty to auto-detect) |
 | Attach Delay Ms | Delay before attaching (in milliseconds) |
 | Solution Path | Path to the .sln file (leave empty to auto-detect) |
@@ -51,10 +51,6 @@ When the plugin is active:
 
 ## IDE Support
 
-### Rider
-- Uses the `rider attach-to-process netcore <pid> <solution>` command.
-- Requires Rider 2020.1 or later.
-
 ### VS Code
 - Automatically generates/updates `.vscode/launch.json`.
 - Requires the C# extension.
@@ -65,11 +61,6 @@ When the plugin is active:
 ### Process Not Found (PID)
 - Ensure the project is built with C#.
 - Try increasing the **Attach Delay Ms**.
-
-### Rider Fails to Attach
-- Check if the Rider Path is correct.
-- Check if the Solution Path is correct.
-- Check the Godot Editor Output console for error messages.
 
 ### VS Code Fails to Attach
 - Ensure the C# extension is installed.

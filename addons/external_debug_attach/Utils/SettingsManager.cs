@@ -9,7 +9,7 @@ namespace ExternalDebugAttach;
 /// </summary>
 public enum IdeType
 {
-    Rider,
+    // Rider, // Temporarily disabled
     VSCode
 }
 
@@ -39,9 +39,9 @@ public class SettingsManager
         // IDE Type
         if (!_editorSettings.HasSetting(SettingIdeType))
         {
-            _editorSettings.SetSetting(SettingIdeType, (int)IdeType.Rider);
+            _editorSettings.SetSetting(SettingIdeType, (int)IdeType.VSCode);
         }
-        AddSettingInfo(SettingIdeType, Variant.Type.Int, PropertyHint.Enum, "Rider,VSCode");
+        AddSettingInfo(SettingIdeType, Variant.Type.Int, PropertyHint.Enum, "VSCode");
 
         // IDE Path
         if (!_editorSettings.HasSetting(SettingIdePath))
@@ -99,7 +99,7 @@ public class SettingsManager
             var ideType = GetIdeType();
             path = ideType switch
             {
-                IdeType.Rider => DetectRiderPath(),
+                // IdeType.Rider => DetectRiderPath(),
                 IdeType.VSCode => DetectVSCodePath(),
                 _ => ""
             };
