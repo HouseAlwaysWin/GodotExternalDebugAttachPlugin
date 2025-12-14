@@ -39,8 +39,15 @@ public class SettingsManager
     {
         // Cleanup deprecated settings
         if (_editorSettings.HasSetting(SettingIdeType)) _editorSettings.Erase(SettingIdeType);
-        if (_editorSettings.HasSetting(SettingIdePath)) _editorSettings.Erase(SettingIdePath);
+        // IdePath restored as per user request
         if (_editorSettings.HasSetting(SettingSolutionPath)) _editorSettings.Erase(SettingSolutionPath);
+
+        // IDE Path
+        if (!_editorSettings.HasSetting(SettingIdePath))
+        {
+            _editorSettings.SetSetting(SettingIdePath, "");
+        }
+        AddSettingInfo(SettingIdePath, Variant.Type.String, PropertyHint.GlobalFile, "*.exe");
 
         // Attach Delay
         if (!_editorSettings.HasSetting(SettingAttachDelayMs))
@@ -76,8 +83,15 @@ public class SettingsManager
     /// </summary>
     public string GetIdePath()
     {
-        // Always auto-detect for now
-        return DetectVSCodePath();
+        var path = (string)_editorSettings.GetSetting(SettingIdePath);
+
+        if (string.IsNullOrEmpty(path))
+        {
+            // Always auto-detect VSCode for now
+            return DetectVSCodePath();
+        }
+
+        return path;
     }
 
     /// <summary>
