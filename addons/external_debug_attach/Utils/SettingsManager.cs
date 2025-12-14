@@ -1,5 +1,6 @@
 using Godot;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using SysEnv = System.Environment;
 
@@ -236,7 +237,7 @@ public class SettingsManager
     /// </summary>
     private string DetectCursorPath()
     {
-        // 1. Check PATH environment variable for "cursor.cmd" or "Cursor.exe"
+        // 1. Check PATH environment variable for "cursor.cmd" or "cursor"
         var pathEnv = SysEnv.GetEnvironmentVariable("PATH") ?? "";
         var paths = pathEnv.Split(Path.PathSeparator);
 
@@ -244,22 +245,20 @@ public class SettingsManager
         {
             try
             {
-                var fullPath = Path.Combine(p.Trim(), "cursor.cmd");
-                if (File.Exists(fullPath))
+                // Check for cursor.cmd in PATH
+                var cursorCmd = Path.Combine(p.Trim(), "cursor.cmd");
+                if (File.Exists(cursorCmd))
                 {
-                    // Standard Cursor structure:
-                    // .../Cursor/Cursor.exe
-                    // .../Cursor/bin/cursor.cmd
-
-                    var binDir = Path.GetDirectoryName(fullPath);
-                    if (!string.IsNullOrEmpty(binDir))
+                    // New Cursor structure (0.45+):
+                    // .../cursor/Cursor.exe
+                    // .../cursor/resources/app/bin/cursor.cmd
+                    // Navigate up from bin -> app -> resources -> cursor
+                    var currentDir = Path.GetDirectoryName(cursorCmd);
+                    for (int i = 0; i < 4 && !string.IsNullOrEmpty(currentDir); i++)
                     {
-                        var installDir = Directory.GetParent(binDir)?.FullName;
-                        if (installDir != null)
-                        {
-                            var exePath = Path.Combine(installDir, "Cursor.exe");
-                            if (File.Exists(exePath)) return exePath;
-                        }
+                        var exePath = Path.Combine(currentDir, "Cursor.exe");
+                        if (File.Exists(exePath)) return exePath;
+                        currentDir = Directory.GetParent(currentDir)?.FullName;
                     }
                 }
 
@@ -270,20 +269,28 @@ public class SettingsManager
             catch { }
         }
 
-        // 2. Common Cursor paths on Windows
-        string[] possiblePaths =
+        // 2. Common Cursor paths on Windows (check multiple drives)
+        var localAppData = SysEnv.GetFolderPath(SysEnv.SpecialFolder.LocalApplicationData);
+        var programFiles = SysEnv.GetFolderPath(SysEnv.SpecialFolder.ProgramFiles);
+        var programFilesX86 = SysEnv.GetFolderPath(SysEnv.SpecialFolder.ProgramFilesX86);
+
+        // Build paths for both C: and D: drives (common secondary user data location)
+        var basePaths = new List<string>
         {
-            Path.Combine(SysEnv.GetFolderPath(SysEnv.SpecialFolder.LocalApplicationData),
-                "Programs", "cursor", "Cursor.exe"),
-            Path.Combine(SysEnv.GetFolderPath(SysEnv.SpecialFolder.LocalApplicationData),
-                "Programs", "Cursor", "Cursor.exe"),
-            Path.Combine(SysEnv.GetFolderPath(SysEnv.SpecialFolder.ProgramFiles),
-                "Cursor", "Cursor.exe"),
-            Path.Combine(SysEnv.GetFolderPath(SysEnv.SpecialFolder.ProgramFilesX86),
-                "Cursor", "Cursor.exe")
+            Path.Combine(localAppData, "Programs", "cursor", "Cursor.exe"),
+            Path.Combine(localAppData, "Programs", "Cursor", "Cursor.exe"),
+            Path.Combine(programFiles, "Cursor", "Cursor.exe"),
+            Path.Combine(programFilesX86, "Cursor", "Cursor.exe"),
         };
 
-        foreach (var path in possiblePaths)
+        // Also check D: drive equivalent paths
+        if (localAppData.StartsWith("C:", StringComparison.OrdinalIgnoreCase))
+        {
+            basePaths.Add("D:" + localAppData.Substring(2).Replace("AppData\\Local", "AppData\\Local\\Programs\\cursor\\Cursor.exe"));
+            basePaths.Add(localAppData.Replace("C:", "D:").Replace("Local", "Local\\Programs\\cursor\\Cursor.exe"));
+        }
+
+        foreach (var path in basePaths)
         {
             if (File.Exists(path))
             {

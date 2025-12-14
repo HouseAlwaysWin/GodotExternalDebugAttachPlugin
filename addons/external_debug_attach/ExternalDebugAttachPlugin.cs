@@ -147,6 +147,7 @@ public partial class ExternalDebugAttachPlugin : EditorPlugin
                     {
                         // IdeType.Rider => new RiderAttacher(),
                         IdeType.VSCode => new VSCodeAttacher(),
+                        IdeType.Cursor => new VSCodeAttacher(), // Cursor is VS Code-based
                         _ => throw new NotSupportedException($"IDE type {ideType} is not supported")
                     };
 

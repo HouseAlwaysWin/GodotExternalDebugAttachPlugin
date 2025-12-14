@@ -53,12 +53,17 @@ public class VSCodeAttacher : IIdeAttacher
 
             GD.Print($"[VSCodeAttacher] Created launch.json at: {launchJsonPath}");
 
-            // Record current VS Code processes before launching
-            var existingCodePids = Process.GetProcessesByName("Code")
+            // Determine if we're using Cursor or VS Code based on the executable name
+            var exeName = Path.GetFileNameWithoutExtension(idePath);
+            bool isCursor = exeName.Equals("Cursor", StringComparison.OrdinalIgnoreCase);
+            string processName = isCursor ? "Cursor" : "Code";
+
+            // Record current processes before launching
+            var existingPids = Process.GetProcessesByName(processName)
                 .Select(p => p.Id)
                 .ToHashSet();
 
-            // Step 1: Open VS Code with the workspace
+            // Step 1: Open VS Code/Cursor with the workspace
             var openArgs = $"\"{workspacePath}\" --reuse-window";
             GD.Print($"[VSCodeAttacher] Opening workspace: \"{idePath}\" {openArgs}");
 
@@ -70,57 +75,57 @@ public class VSCodeAttacher : IIdeAttacher
             };
             Process.Start(openProcess);
 
-            // Step 2: Wait for VS Code to be ready
-            GD.Print("[VSCodeAttacher] Waiting for VS Code to be ready...");
+            // Step 2: Wait for VS Code/Cursor to be ready
+            GD.Print($"[VSCodeAttacher] Waiting for {(isCursor ? "Cursor" : "VS Code")} to be ready...");
 
-            // Check if VS Code was already running
-            bool wasAlreadyRunning = existingCodePids.Count > 0;
+            // Check if IDE was already running
+            bool wasAlreadyRunning = existingPids.Count > 0;
 
             int waitedMs = 0;
             int maxWaitMs = 15000; // Max 15 seconds
             int intervalMs = 500;
-            // If VS Code was already running, we need to wait for the workspace to reload
+            // If IDE was already running, we need to wait for the workspace to reload
             int minWaitMs = wasAlreadyRunning ? 5000 : 3000;
-            Process? codeProcess = null;
+            Process? ideProcess = null;
 
             while (waitedMs < maxWaitMs)
             {
                 System.Threading.Thread.Sleep(intervalMs);
                 waitedMs += intervalMs;
 
-                // Check if there's a VS Code process running
-                var codeProcesses = Process.GetProcessesByName("Code");
-                if (codeProcesses.Length > 0)
+                // Check if there's a matching process running
+                var processes = Process.GetProcessesByName(processName);
+                if (processes.Length > 0)
                 {
                     // Prefer a new process, otherwise use any existing one
-                    codeProcess = codeProcesses
-                        .FirstOrDefault(p => !existingCodePids.Contains(p.Id))
-                        ?? codeProcesses.First();
+                    ideProcess = processes
+                        .FirstOrDefault(p => !existingPids.Contains(p.Id))
+                        ?? processes.First();
 
-                    // Wait enough time for VS Code to fully load the workspace
+                    // Wait enough time for IDE to fully load the workspace
                     if (waitedMs >= minWaitMs)
                     {
-                        GD.Print($"[VSCodeAttacher] VS Code ready after {waitedMs}ms (PID: {codeProcess.Id}, was running: {wasAlreadyRunning})");
+                        GD.Print($"[VSCodeAttacher] {(isCursor ? "Cursor" : "VS Code")} ready after {waitedMs}ms (PID: {ideProcess.Id}, was running: {wasAlreadyRunning})");
                         break;
                     }
                 }
             }
 
-            if (codeProcess == null)
+            if (ideProcess == null)
             {
-                GD.PrintErr("[VSCodeAttacher] VS Code process not found after waiting");
-                GD.Print("[VSCodeAttacher] Please press F5 in VS Code manually to start debugging.");
+                GD.PrintErr($"[VSCodeAttacher] {(isCursor ? "Cursor" : "VS Code")} process not found after waiting");
+                GD.Print($"[VSCodeAttacher] Please press F5 in {(isCursor ? "Cursor" : "VS Code")} manually to start debugging.");
                 return AttachResult.Ok();
             }
 
-            // Step 3: Send F5 keypress to VS Code using PowerShell
-            GD.Print("[VSCodeAttacher] Sending F5 keypress to start debugging...");
+            // Step 3: Send F5 keypress to IDE using PowerShell
+            GD.Print($"[VSCodeAttacher] Sending F5 keypress to {(isCursor ? "Cursor" : "VS Code")}...");
 
             try
             {
                 // Use AppActivate with process ID for reliable window activation
                 var psCommand = $"Add-Type -AssemblyName Microsoft.VisualBasic; " +
-                    $"[Microsoft.VisualBasic.Interaction]::AppActivate({codeProcess.Id}); " +
+                    $"[Microsoft.VisualBasic.Interaction]::AppActivate({ideProcess.Id}); " +
                     "Start-Sleep -Milliseconds 1000; " +
                     "Add-Type -AssemblyName System.Windows.Forms; " +
                     "[System.Windows.Forms.SendKeys]::SendWait('{F5}')";
@@ -138,12 +143,12 @@ public class VSCodeAttacher : IIdeAttacher
                 using var ps = Process.Start(psProcess);
                 ps?.WaitForExit(10000);
 
-                GD.Print("[VSCodeAttacher] F5 keypress sent to VS Code.");
+                GD.Print($"[VSCodeAttacher] F5 keypress sent to {(isCursor ? "Cursor" : "VS Code")}.");
             }
             catch (Exception ex)
             {
                 GD.Print($"[VSCodeAttacher] Could not send F5 keystroke: {ex.Message}");
-                GD.Print("[VSCodeAttacher] Please press F5 in VS Code manually to start debugging.");
+                GD.Print($"[VSCodeAttacher] Please press F5 in {(isCursor ? "Cursor" : "VS Code")} manually to start debugging.");
             }
 
             return AttachResult.Ok();
