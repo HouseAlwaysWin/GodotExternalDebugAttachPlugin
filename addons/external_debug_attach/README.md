@@ -29,6 +29,22 @@
    - 偵測 Godot 遊戲程序 PID
    - 啟動 IDE 並附加 debugger
 
+## 等待 Debugger 附加（可選）
+
+為確保不會錯過初始化時的斷點，可以設定 Autoload 讓遊戲等待 debugger 附加：
+
+1. Project → Project Settings → Globals → Autoload
+2. 新增：
+   - Path: `res://addons/external_debug_attach/DebugWaitAutoload.cs`
+   - Name: `DebugWait`
+3. 確保它在 Autoload 列表的**最上方**
+
+啟用後：
+- 遊戲啟動時會暫停並顯示「Waiting for debugger...」
+- Debugger 附加後自動繼續
+- 按 ESC 可跳過等待
+- 超時 30 秒後自動繼續
+
 ## IDE 支援
 
 ### Rider
