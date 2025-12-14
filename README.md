@@ -25,6 +25,7 @@ Go to **Editor** → **Editor Settings** and find the "External Debug Attach" se
 
 | Setting | Description |
 |---------|-------------|
+| IDE Path | Path to the IDE executable (leave empty to auto-detect) |
 | Attach Delay Ms | Delay before attaching (in milliseconds) |
 
 ## Usage
