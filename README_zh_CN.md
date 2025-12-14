@@ -2,12 +2,12 @@
 
 [English](README.md) | **中文**
 
-一鍵 Run + Attach Debug 到外部 IDE（VS Code）的 Godot Editor Plugin。
+一鍵 Run + Attach Debug 到外部 IDE（VS Code / Cursor）的 Godot Editor Plugin。
 
 ## 特色
 
 - 🚀 一鍵執行遊戲並附加 Debugger
-- 🔧 支援 VS Code
+- 🔧 支援 VS Code 和 Cursor
 - ⏳ 可選的等待 Debugger 功能（確保不錯過初始化斷點）
 - 🎯 自動偵測 IDE 和 Solution 路徑
 - ⌨️ 快捷鍵支援：**Alt+F5**
@@ -25,7 +25,9 @@
 
 | 設定項 | 說明 |
 |--------|------|
-| IDE Path | IDE 可執行檔路徑（留空自動偵測） |
+| IDE Type | 選擇 IDE：VSCode 或 Cursor |
+| VS Code Path | VS Code 可執行檔路徑（留空自動偵測） |
+| Cursor Path | Cursor 可執行檔路徑（留空自動偵測） |
 | Attach Delay Ms | Attach 前的等待時間（毫秒） |
 
 ## 使用方法
@@ -55,6 +57,10 @@
 - 自動生成 `.vscode/launch.json`
 - 需要安裝 C# 擴充套件
 - 自動發送 F5 開始除錯
+
+### Cursor
+- 與 VS Code 相同（使用相同的 Debugger 設定）
+- 自動偵測 Cursor 安裝路徑
 
 ## 常見問題
 

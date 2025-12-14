@@ -2,12 +2,12 @@
 
 **English** | [中文](README_zh_CN.md)
 
-One-click Run + Attach Debug to external IDE (VS Code) for Godot Editor.
+One-click Run + Attach Debug to external IDE (VS Code / Cursor) for Godot Editor.
 
 ## Features
 
 - 🚀 One-click to run game and attach debugger
-- 🔧 Supports Visual Studio Code
+- 🔧 Supports Visual Studio Code and Cursor
 - ⏳ Optional wait for debugger (never miss initialization breakpoints using Autoload)
 - 🎯 Auto-detect IDE and solution paths
 - ⌨️ Keyboard shortcut support: **Alt+F5**
@@ -25,7 +25,9 @@ Go to **Editor** → **Editor Settings** and find the "External Debug Attach" se
 
 | Setting | Description |
 |---------|-------------|
-| IDE Path | Path to the IDE executable (leave empty to auto-detect) |
+| IDE Type | Select IDE: VSCode or Cursor |
+| VS Code Path | Path to VS Code executable (leave empty to auto-detect) |
+| Cursor Path | Path to Cursor executable (leave empty to auto-detect) |
 | Attach Delay Ms | Delay before attaching (in milliseconds) |
 
 ## Usage
@@ -53,6 +55,10 @@ When the plugin is active:
 - Automatically generates/updates `.vscode/launch.json`.
 - Requires the C# extension.
 - Automatically sends `F5` to the VS Code window to start debugging.
+
+### Cursor
+- Same as VS Code (uses the same debugger configuration).
+- Automatically detects Cursor installation.
 
 ## Troubleshooting
 

@@ -10,8 +10,8 @@ namespace ExternalDebugAttach;
 /// </summary>
 public enum IdeType
 {
-    // Rider, // Temporarily disabled
-    VSCode
+    VSCode,
+    Cursor
 }
 
 /// <summary>
@@ -21,8 +21,12 @@ public class SettingsManager
 {
     private const string SettingPrefix = "external_debug_attach/";
     private const string SettingIdeType = SettingPrefix + "ide_type";
-    private const string SettingIdePath = SettingPrefix + "ide_path";
+    private const string SettingVSCodePath = SettingPrefix + "vscode_path";
+    private const string SettingCursorPath = SettingPrefix + "cursor_path";
     private const string SettingAttachDelayMs = SettingPrefix + "attach_delay_ms";
+
+    // Deprecated settings (for cleanup)
+    private const string SettingIdePath = SettingPrefix + "ide_path";
     private const string SettingSolutionPath = SettingPrefix + "solution_path";
 
     private EditorSettings _editorSettings;
@@ -38,16 +42,29 @@ public class SettingsManager
     public void InitializeSettings()
     {
         // Cleanup deprecated settings
-        if (_editorSettings.HasSetting(SettingIdeType)) _editorSettings.Erase(SettingIdeType);
-        // IdePath restored as per user request
+        if (_editorSettings.HasSetting(SettingIdePath)) _editorSettings.Erase(SettingIdePath);
         if (_editorSettings.HasSetting(SettingSolutionPath)) _editorSettings.Erase(SettingSolutionPath);
 
-        // IDE Path
-        if (!_editorSettings.HasSetting(SettingIdePath))
+        // IDE Type dropdown
+        if (!_editorSettings.HasSetting(SettingIdeType))
         {
-            _editorSettings.SetSetting(SettingIdePath, "");
+            _editorSettings.SetSetting(SettingIdeType, (int)IdeType.VSCode);
         }
-        AddSettingInfo(SettingIdePath, Variant.Type.String, PropertyHint.GlobalFile, "*.exe");
+        AddSettingInfo(SettingIdeType, Variant.Type.Int, PropertyHint.Enum, "VSCode,Cursor");
+
+        // VS Code Path
+        if (!_editorSettings.HasSetting(SettingVSCodePath))
+        {
+            _editorSettings.SetSetting(SettingVSCodePath, "");
+        }
+        AddSettingInfo(SettingVSCodePath, Variant.Type.String, PropertyHint.GlobalFile, "*.exe");
+
+        // Cursor Path
+        if (!_editorSettings.HasSetting(SettingCursorPath))
+        {
+            _editorSettings.SetSetting(SettingCursorPath, "");
+        }
+        AddSettingInfo(SettingCursorPath, Variant.Type.String, PropertyHint.GlobalFile, "*.exe");
 
         // Attach Delay
         if (!_editorSettings.HasSetting(SettingAttachDelayMs))
@@ -74,8 +91,7 @@ public class SettingsManager
     /// </summary>
     public IdeType GetIdeType()
     {
-        // Hardcoded to VSCode as Rider support is temporarily disabled
-        return IdeType.VSCode;
+        return (IdeType)(int)_editorSettings.GetSetting(SettingIdeType);
     }
 
     /// <summary>
@@ -83,15 +99,18 @@ public class SettingsManager
     /// </summary>
     public string GetIdePath()
     {
-        var path = (string)_editorSettings.GetSetting(SettingIdePath);
+        var ideType = GetIdeType();
 
-        if (string.IsNullOrEmpty(path))
+        if (ideType == IdeType.Cursor)
         {
-            // Always auto-detect VSCode for now
-            return DetectVSCodePath();
+            var path = (string)_editorSettings.GetSetting(SettingCursorPath);
+            return string.IsNullOrEmpty(path) ? DetectCursorPath() : path;
         }
-
-        return path;
+        else // VSCode
+        {
+            var path = (string)_editorSettings.GetSetting(SettingVSCodePath);
+            return string.IsNullOrEmpty(path) ? DetectVSCodePath() : path;
+        }
     }
 
     /// <summary>
@@ -213,6 +232,69 @@ public class SettingsManager
     }
 
     /// <summary>
+    /// Auto-detect Cursor installation path
+    /// </summary>
+    private string DetectCursorPath()
+    {
+        // 1. Check PATH environment variable for "cursor.cmd" or "Cursor.exe"
+        var pathEnv = SysEnv.GetEnvironmentVariable("PATH") ?? "";
+        var paths = pathEnv.Split(Path.PathSeparator);
+
+        foreach (var p in paths)
+        {
+            try
+            {
+                var fullPath = Path.Combine(p.Trim(), "cursor.cmd");
+                if (File.Exists(fullPath))
+                {
+                    // Standard Cursor structure:
+                    // .../Cursor/Cursor.exe
+                    // .../Cursor/bin/cursor.cmd
+
+                    var binDir = Path.GetDirectoryName(fullPath);
+                    if (!string.IsNullOrEmpty(binDir))
+                    {
+                        var installDir = Directory.GetParent(binDir)?.FullName;
+                        if (installDir != null)
+                        {
+                            var exePath = Path.Combine(installDir, "Cursor.exe");
+                            if (File.Exists(exePath)) return exePath;
+                        }
+                    }
+                }
+
+                // Also check for Cursor.exe directly in PATH
+                var directExe = Path.Combine(p.Trim(), "Cursor.exe");
+                if (File.Exists(directExe)) return directExe;
+            }
+            catch { }
+        }
+
+        // 2. Common Cursor paths on Windows
+        string[] possiblePaths =
+        {
+            Path.Combine(SysEnv.GetFolderPath(SysEnv.SpecialFolder.LocalApplicationData),
+                "Programs", "cursor", "Cursor.exe"),
+            Path.Combine(SysEnv.GetFolderPath(SysEnv.SpecialFolder.LocalApplicationData),
+                "Programs", "Cursor", "Cursor.exe"),
+            Path.Combine(SysEnv.GetFolderPath(SysEnv.SpecialFolder.ProgramFiles),
+                "Cursor", "Cursor.exe"),
+            Path.Combine(SysEnv.GetFolderPath(SysEnv.SpecialFolder.ProgramFilesX86),
+                "Cursor", "Cursor.exe")
+        };
+
+        foreach (var path in possiblePaths)
+        {
+            if (File.Exists(path))
+            {
+                return path;
+            }
+        }
+
+        return "";
+    }
+
+    /// <summary>
     /// Auto-detect VS Code installation path
     /// </summary>
     private string DetectVSCodePath()
@@ -238,12 +320,15 @@ public class SettingsManager
                     // .../Microsoft VS Code/bin/code.cmd
 
                     var binDir = Path.GetDirectoryName(fullPath);
-                    var installDir = Directory.GetParent(binDir)?.FullName;
-
-                    if (installDir != null)
+                    if (!string.IsNullOrEmpty(binDir))
                     {
-                        var exePath = Path.Combine(installDir, "Code.exe");
-                        if (File.Exists(exePath)) return exePath;
+                        var installDir = Directory.GetParent(binDir)?.FullName;
+
+                        if (installDir != null)
+                        {
+                            var exePath = Path.Combine(installDir, "Code.exe");
+                            if (File.Exists(exePath)) return exePath;
+                        }
                     }
                 }
 
