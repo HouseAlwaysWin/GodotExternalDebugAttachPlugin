@@ -33,6 +33,7 @@ public class SettingsManager
     private const string SettingSolutionPath = SettingPrefix + "solution_path";
 
     private EditorSettings _editorSettings;
+    private IdeType _previousIdeType;
 
     public SettingsManager()
     {
@@ -82,6 +83,92 @@ public class SettingsManager
             _editorSettings.SetSetting(SettingAttachDelayMs, 1000);
         }
         AddSettingInfo(SettingAttachDelayMs, Variant.Type.Int, PropertyHint.Range, "100,5000,100");
+
+        // Store the initial IDE type for change detection
+        _previousIdeType = GetIdeType();
+
+        // Connect to settings changed signal
+        _editorSettings.SettingsChanged += OnSettingsChanged;
+    }
+
+    /// <summary>
+    /// Cleanup event handlers
+    /// </summary>
+    public void Cleanup()
+    {
+        _editorSettings.SettingsChanged -= OnSettingsChanged;
+    }
+
+    /// <summary>
+    /// Called when any editor setting changes
+    /// </summary>
+    private void OnSettingsChanged()
+    {
+        var currentIdeType = GetIdeType();
+        if (currentIdeType != _previousIdeType)
+        {
+            GD.Print($"[ExternalDebugAttach] IDE Type changed from {_previousIdeType} to {currentIdeType}, triggering build...");
+            _previousIdeType = currentIdeType;
+            TriggerBuild();
+        }
+    }
+
+    /// <summary>
+    /// Trigger Godot's C# project build
+    /// </summary>
+    private void TriggerBuild()
+    {
+        try
+        {
+            var projectPath = ProjectSettings.GlobalizePath("res://");
+            GD.Print($"[ExternalDebugAttach] Running dotnet build in: {projectPath}");
+
+            var startInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "dotnet",
+                Arguments = "build",
+                WorkingDirectory = projectPath,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                try
+                {
+                    using var process = System.Diagnostics.Process.Start(startInfo);
+                    if (process != null)
+                    {
+                        var output = process.StandardOutput.ReadToEnd();
+                        var error = process.StandardError.ReadToEnd();
+                        process.WaitForExit();
+
+                        if (process.ExitCode == 0)
+                        {
+                            GD.Print($"[ExternalDebugAttach] Build completed successfully");
+                        }
+                        else
+                        {
+                            GD.PrintErr($"[ExternalDebugAttach] Build failed with code {process.ExitCode}");
+                            if (!string.IsNullOrEmpty(error))
+                            {
+                                GD.PrintErr($"[ExternalDebugAttach] Build error: {error}");
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    GD.PrintErr($"[ExternalDebugAttach] Build process error: {ex.Message}");
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"[ExternalDebugAttach] Failed to trigger build: {ex.Message}");
+        }
     }
 
     private void AddSettingInfo(string name, Variant.Type type, PropertyHint hint, string hintString)

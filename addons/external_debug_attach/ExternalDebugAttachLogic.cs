@@ -34,6 +34,7 @@ public partial class ExternalDebugAttachLogic : RefCounted
     {
         GD.Print("[ExternalDebugAttach] C# logic cleaning up...");
 
+        _settingsManager?.Cleanup();
         UnregisterDebugWaitAutoload();
 
         GD.Print("[ExternalDebugAttach] C# logic cleaned up");
