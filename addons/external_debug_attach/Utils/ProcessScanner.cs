@@ -1,7 +1,6 @@
 using System;
 using System.Diagnostics;
 using System.Linq;
-using System.Management;
 using System.Runtime.Versioning;
 using Godot;
 
@@ -31,66 +30,32 @@ public static class ProcessScanner
 
             GD.Print($"[ProcessScanner] Found {godotProcesses.Count} Godot processes");
 
-            // First pass: Look for process with --remote-debug (this is the game process)
-            // Note: Game process has --remote-debug and --editor-pid, but NOT standalone --editor flag
-            foreach (var process in godotProcesses)
-            {
-                try
-                {
-                    var commandLine = GetCommandLine(process.Id);
-                    GD.Print($"[ProcessScanner] PID {process.Id}: {commandLine}");
+            // Simplified detection logic without WMI:
+            // 1. Filter out editor processes by checking WindowTitle (Editor usually has specific title format)
+            // 2. Prefer processes that are not the editor
+            // 3. Select the most recently started process
 
-                    // Game process uses --remote-debug. Check that it's NOT the editor.
-                    // Editor has " --editor" flag, game has "--editor-pid" (different!)
-                    if (commandLine.Contains("--remote-debug"))
-                    {
-                        // This is the game process - it has --remote-debug
-                        GD.Print($"[ProcessScanner] Found game process (--remote-debug): PID {process.Id}");
-                        return process.Id;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    GD.Print($"[ProcessScanner] Error checking process {process.Id}: {ex.Message}");
-                }
-            }
+            // Filter out known editor processes based on WindowTitle
+            // Editor title usually starts with "project_name - Godot Engine" or similar, 
+            // but game window title is usually just "project_name" or "debug".
+            // However, this is flaky.
+            // Better heuristic: The game process is usually started AFTER the editor.
+            // And we can try to exclude the current process (the editor running this plugin).
 
-            // Second pass: Look for non-editor process running our project
-            foreach (var process in godotProcesses)
-            {
-                try
-                {
-                    var commandLine = GetCommandLine(process.Id);
+            var currentPid = System.Environment.ProcessId;
 
-                    // Skip the editor process (use stricter check: " --editor" or " -e " with spaces)
-                    if (IsEditorCommandLine(commandLine))
-                    {
-                        continue;
-                    }
-
-                    // Check if this process is running our project
-                    if (commandLine.Contains(projectPath) || IsRecentProcess(process))
-                    {
-                        GD.Print($"[ProcessScanner] Found matching process: PID {process.Id}");
-                        return process.Id;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    GD.Print($"[ProcessScanner] Error checking process {process.Id}: {ex.Message}");
-                }
-            }
-
-            // Fallback: return the most recent non-editor Godot process
-            var recentProcess = godotProcesses
-                .Where(p => !IsEditorProcess(p))
+            // Sort by start time descending (newest first)
+            var candidates = godotProcesses
+                .Where(p => p.Id != currentPid) // Exclude self (editor)
                 .OrderByDescending(p => GetProcessStartTimeSafe(p))
-                .FirstOrDefault();
+                .ToList();
 
-            if (recentProcess != null)
+            if (candidates.Count > 0)
             {
-                GD.Print($"[ProcessScanner] Using most recent Godot process: PID {recentProcess.Id}");
-                return recentProcess.Id;
+                // First candidate is likely the game (since it was just started)
+                var bestMatch = candidates[0];
+                GD.Print($"[ProcessScanner] Using most recent Godot process (excluding self): PID {bestMatch.Id} Name: {bestMatch.ProcessName} Title: {bestMatch.MainWindowTitle}");
+                return bestMatch.Id;
             }
         }
         catch (Exception ex)
@@ -144,58 +109,4 @@ public static class ProcessScanner
         return name.Contains("godot") || name.Contains("godotsharp");
     }
 
-    /// <summary>
-    /// Check if this is the Godot editor process
-    /// </summary>
-    private static bool IsEditorProcess(Process process)
-    {
-        try
-        {
-            var commandLine = GetCommandLine(process.Id);
-            return commandLine.Contains("--editor") || commandLine.Contains("-e");
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Check if this process was started recently (within last 10 seconds)
-    /// </summary>
-    private static bool IsRecentProcess(Process process)
-    {
-        try
-        {
-            var age = DateTime.Now - process.StartTime;
-            return age.TotalSeconds < 10;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Get the command line arguments for a process using WMI
-    /// </summary>
-    private static string GetCommandLine(int processId)
-    {
-        try
-        {
-            using var searcher = new ManagementObjectSearcher(
-                $"SELECT CommandLine FROM Win32_Process WHERE ProcessId = {processId}");
-
-            foreach (ManagementObject obj in searcher.Get())
-            {
-                return obj["CommandLine"]?.ToString() ?? "";
-            }
-        }
-        catch (Exception ex)
-        {
-            GD.Print($"[ProcessScanner] WMI query failed for PID {processId}: {ex.Message}");
-        }
-
-        return "";
-    }
 }
