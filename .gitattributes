@@ -1,9 +1,7 @@
-# Asset Library export configuration
-# Only include the addons folder when downloaded from Asset Library
+# Normalize line endings for all files that Git considers text files.
+* text=auto eol=lf
 
-# Exclude everything except addons
-/* export-ignore
-/addons export-ignore
-
-# Explicitly include the plugin folder
-!/addons/external_debug_attach/** -export-ignore
+# Only include the addons folder when downloading from the Asset Library.
+/**        export-ignore
+/addons    !export-ignore
+/addons/** !export-ignore
