@@ -31,6 +31,7 @@ public class SettingsManager
     // Deprecated settings (for cleanup)
     private const string SettingIdePath = SettingPrefix + "ide_path";
     private const string SettingSolutionPath = SettingPrefix + "solution_path";
+    private const string SettingAttachDelayMs = SettingPrefix + "attach_delay_ms";  // Deprecated: now uses auto-retry
 
     private EditorSettings _editorSettings;
     private IdeType _previousIdeType;
@@ -48,6 +49,7 @@ public class SettingsManager
         // Cleanup deprecated settings
         if (_editorSettings.HasSetting(SettingIdePath)) _editorSettings.Erase(SettingIdePath);
         if (_editorSettings.HasSetting(SettingSolutionPath)) _editorSettings.Erase(SettingSolutionPath);
+        if (_editorSettings.HasSetting(SettingAttachDelayMs)) _editorSettings.Erase(SettingAttachDelayMs);
 
         // IDE Type dropdown
         if (!_editorSettings.HasSetting(SettingIdeType))
