@@ -70,12 +70,17 @@ public class VSCodeAttacher : IIdeAttacher
             };
             Process.Start(openProcess);
 
-            // Step 2: Wait for VS Code to be ready (new process or window ready)
+            // Step 2: Wait for VS Code to be ready
             GD.Print("[VSCodeAttacher] Waiting for VS Code to be ready...");
+
+            // Check if VS Code was already running
+            bool wasAlreadyRunning = existingCodePids.Count > 0;
 
             int waitedMs = 0;
             int maxWaitMs = 15000; // Max 15 seconds
             int intervalMs = 500;
+            // If VS Code was already running, we need to wait for the workspace to reload
+            int minWaitMs = wasAlreadyRunning ? 5000 : 3000;
             Process? codeProcess = null;
 
             while (waitedMs < maxWaitMs)
@@ -92,10 +97,10 @@ public class VSCodeAttacher : IIdeAttacher
                         .FirstOrDefault(p => !existingCodePids.Contains(p.Id))
                         ?? codeProcesses.First();
 
-                    // Wait a bit more for VS Code to fully load
-                    if (waitedMs >= 3000)
+                    // Wait enough time for VS Code to fully load the workspace
+                    if (waitedMs >= minWaitMs)
                     {
-                        GD.Print($"[VSCodeAttacher] VS Code ready after {waitedMs}ms (PID: {codeProcess.Id})");
+                        GD.Print($"[VSCodeAttacher] VS Code ready after {waitedMs}ms (PID: {codeProcess.Id}, was running: {wasAlreadyRunning})");
                         break;
                     }
                 }
