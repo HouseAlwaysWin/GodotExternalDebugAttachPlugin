@@ -37,11 +37,10 @@ public class SettingsManager
     /// </summary>
     public void InitializeSettings()
     {
-        // IDE Type - Removed from UI since we only support VSCode for now
-        // if (!_editorSettings.HasSetting(SettingIdeType)) ...
-
-        // IDE Path - Removed from UI, will auto-detect
-        // if (!_editorSettings.HasSetting(SettingIdePath)) ...
+        // Cleanup deprecated settings
+        if (_editorSettings.HasSetting(SettingIdeType)) _editorSettings.Erase(SettingIdeType);
+        if (_editorSettings.HasSetting(SettingIdePath)) _editorSettings.Erase(SettingIdePath);
+        if (_editorSettings.HasSetting(SettingSolutionPath)) _editorSettings.Erase(SettingSolutionPath);
 
         // Attach Delay
         if (!_editorSettings.HasSetting(SettingAttachDelayMs))
@@ -49,9 +48,6 @@ public class SettingsManager
             _editorSettings.SetSetting(SettingAttachDelayMs, 1000);
         }
         AddSettingInfo(SettingAttachDelayMs, Variant.Type.Int, PropertyHint.Range, "100,5000,100");
-
-        // Solution Path - Removed from UI, will auto-detect
-        // if (!_editorSettings.HasSetting(SettingSolutionPath)) ...
     }
 
     private void AddSettingInfo(string name, Variant.Type type, PropertyHint hint, string hintString)
