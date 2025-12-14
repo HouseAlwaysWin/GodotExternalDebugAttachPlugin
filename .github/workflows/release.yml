@@ -1,0 +1,46 @@
+# Automated release workflow for Godot Asset Library
+# Triggers when a new tag is pushed (e.g., v1.0.0)
+
+name: Release to Godot Asset Library
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on version tags like v1.0.0
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          generate_release_notes: true
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Optional: Notify Godot Asset Library (manual step required first time)
+      # After your asset is approved on the Asset Library, you can use this action
+      # to automatically update the version when you push a new tag.
+      #
+      # First time setup:
+      # 1. Submit your asset manually at https://godotengine.org/asset-library/asset
+      # 2. Wait for approval
+      # 3. Get your asset ID from the URL (e.g., https://godotengine.org/asset-library/asset/1234 → ID is 1234)
+      # 4. Uncomment the step below and replace ASSET_ID with your actual ID
+      # 5. Add your Godot Asset Library credentials as GitHub secrets:
+      #    - GODOT_ASSET_LIB_USERNAME: Your Godot Asset Library username
+      #    - GODOT_ASSET_LIB_PASSWORD: Your Godot Asset Library password
+
+      # - name: Update Godot Asset Library
+      #   uses: bend-n/godot-asset-lib-action@main
+      #   with:
+      #     username: ${{ secrets.GODOT_ASSET_LIB_USERNAME }}
+      #     password: ${{ secrets.GODOT_ASSET_LIB_PASSWORD }}
+      #     asset_id: ASSET_ID  # Replace with your actual asset ID
+      #     version: ${{ github.ref_name }}
+      #     commit: ${{ github.sha }}

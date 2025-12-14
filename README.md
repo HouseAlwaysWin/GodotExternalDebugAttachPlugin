@@ -2,13 +2,13 @@
 
 **English** | [中文](README_zh_CN.md)
 
-One-click Run + Attach Debug to external IDE (VS Code / Cursor) for Godot Editor.
+One-click Run + Attach Debug to external IDE for Godot Editor.
 
 ## Features
 
 - 🚀 One-click to run game and attach debugger
-- 🔧 Supports Visual Studio Code and Cursor
-- ⏳ Optional wait for debugger (never miss initialization breakpoints using Autoload)
+- 🔧 Supports **VS Code**, **Cursor**, and **AntiGravity**
+- ⏳ Optional wait for debugger (never miss initialization breakpoints)
 - 🎯 Auto-detect IDE and solution paths
 - ⌨️ Keyboard shortcut support: **Alt+F5**
 
@@ -25,9 +25,10 @@ Go to **Editor** → **Editor Settings** and find the "External Debug Attach" se
 
 | Setting | Description |
 |---------|-------------|
-| IDE Type | Select IDE: VSCode or Cursor |
+| IDE Type | Select IDE: VSCode, Cursor, or AntiGravity |
 | VS Code Path | Path to VS Code executable (leave empty to auto-detect) |
 | Cursor Path | Path to Cursor executable (leave empty to auto-detect) |
+| AntiGravity Path | Path to AntiGravity executable (leave empty to auto-detect) |
 | Attach Delay Ms | Delay before attaching (in milliseconds) |
 
 ## Usage
@@ -60,17 +61,25 @@ When the plugin is active:
 - Same as VS Code (uses the same debugger configuration).
 - Automatically detects Cursor installation.
 
+### AntiGravity
+- Same as VS Code (uses the same debugger configuration).
+- Automatically detects AntiGravity installation.
+
 ## Troubleshooting
 
 ### Process Not Found (PID)
 - Ensure the project is built with C#.
 - Try increasing the **Attach Delay Ms**.
 
-### VS Code Fails to Attach
+### IDE Fails to Attach
 - Ensure the C# extension is installed.
-- Manually select the **".NET Attach (Godot)"** configuration in VS Code.
+- Manually select the **".NET Attach (Godot)"** configuration in your IDE.
 
 ## Known Limitations
 
 - **Restart Godot After Debugging**: Due to a known issue [Godot #78513](https://github.com/godotengine/godot/issues/78513), reloading .NET assemblies often fails after a debug session, causing errors on the next run. The plugin will show a reminder popup if this error is detected, suggesting a restart.
 - **Windows Only**: Currently uses WMI for process detection, so only Windows is supported.
+
+## License
+
+MIT License

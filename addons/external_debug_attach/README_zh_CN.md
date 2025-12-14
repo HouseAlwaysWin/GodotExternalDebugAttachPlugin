@@ -2,12 +2,12 @@
 
 [English](README.md) | **中文**
 
-一鍵 Run + Attach Debug 到外部 IDE（VS Code）的 Godot Editor Plugin。
+一鍵 Run + Attach Debug 到外部 IDE 的 Godot Editor Plugin。
 
 ## 特色
 
 - 🚀 一鍵執行遊戲並附加 Debugger
-- 🔧 支援 VS Code
+- 🔧 支援 **VS Code**、**Cursor** 和 **AntiGravity**
 - ⏳ 可選的等待 Debugger 功能（確保不錯過初始化斷點）
 - 🎯 自動偵測 IDE 和 Solution 路徑
 - ⌨️ 快捷鍵支援：**Alt+F5**
@@ -25,7 +25,10 @@
 
 | 設定項 | 說明 |
 |--------|------|
-| IDE Path | IDE 可執行檔路徑（留空自動偵測） |
+| IDE Type | 選擇 IDE：VSCode、Cursor 或 AntiGravity |
+| VS Code Path | VS Code 可執行檔路徑（留空自動偵測） |
+| Cursor Path | Cursor 可執行檔路徑（留空自動偵測） |
+| AntiGravity Path | AntiGravity 可執行檔路徑（留空自動偵測） |
 | Attach Delay Ms | Attach 前的等待時間（毫秒） |
 
 ## 使用方法
@@ -56,17 +59,29 @@
 - 需要安裝 C# 擴充套件
 - 自動發送 F5 開始除錯
 
+### Cursor
+- 與 VS Code 相同（使用相同的 Debugger 設定）
+- 自動偵測 Cursor 安裝路徑
+
+### AntiGravity
+- 與 VS Code 相同（使用相同的 Debugger 設定）
+- 自動偵測 AntiGravity 安裝路徑
+
 ## 常見問題
 
 ### 找不到 PID
 - 確認專案已使用 C# 建置
 - 增加 Attach Delay 時間
 
-### VS Code 無法附加
+### IDE 無法附加
 - 確認已安裝 C# 擴充套件
-- 在 VS Code 中手動選擇 ".NET Attach (Godot)" 配置
+- 在 IDE 中手動選擇 ".NET Attach (Godot)" 配置
 
 ## 已知限制
 
-- **Debug Sesssion 結束後需重啟 Godot**：由於 [Godot #78513](https://github.com/godotengine/godot/issues/78513) bug，.NET assembly 重載可能會失敗，導致下次 debug 時報錯。Plugin 會在偵測到錯誤時跳出提醒視窗。
+- **Debug Session 結束後需重啟 Godot**：由於 [Godot #78513](https://github.com/godotengine/godot/issues/78513) bug，.NET assembly 重載可能會失敗，導致下次 debug 時報錯。Plugin 會在偵測到錯誤時跳出提醒視窗。
 - **僅支援 Windows**：目前使用 WMI 進行程序偵測，僅支援 Windows 平台。
+
+## 授權
+
+MIT License
