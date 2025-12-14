@@ -53,10 +53,12 @@ public class VSCodeAttacher : IIdeAttacher
 
             GD.Print($"[VSCodeAttacher] Created launch.json at: {launchJsonPath}");
 
-            // Determine if we're using Cursor or VS Code based on the executable name
+            // Determine which IDE we're using based on the executable name
             var exeName = Path.GetFileNameWithoutExtension(idePath);
             bool isCursor = exeName.Equals("Cursor", StringComparison.OrdinalIgnoreCase);
-            string processName = isCursor ? "Cursor" : "Code";
+            bool isAntiGravity = exeName.Equals("Antigravity", StringComparison.OrdinalIgnoreCase);
+            string processName = isCursor ? "Cursor" : isAntiGravity ? "Antigravity" : "Code";
+            string ideName = isCursor ? "Cursor" : isAntiGravity ? "AntiGravity" : "VS Code";
 
             // Record current processes before launching
             var existingPids = Process.GetProcessesByName(processName)
@@ -76,7 +78,7 @@ public class VSCodeAttacher : IIdeAttacher
             Process.Start(openProcess);
 
             // Step 2: Wait for VS Code/Cursor to be ready
-            GD.Print($"[VSCodeAttacher] Waiting for {(isCursor ? "Cursor" : "VS Code")} to be ready...");
+            GD.Print($"[VSCodeAttacher] Waiting for {ideName} to be ready...");
 
             // Check if IDE was already running
             bool wasAlreadyRunning = existingPids.Count > 0;
@@ -105,7 +107,7 @@ public class VSCodeAttacher : IIdeAttacher
                     // Wait enough time for IDE to fully load the workspace
                     if (waitedMs >= minWaitMs)
                     {
-                        GD.Print($"[VSCodeAttacher] {(isCursor ? "Cursor" : "VS Code")} ready after {waitedMs}ms (PID: {ideProcess.Id}, was running: {wasAlreadyRunning})");
+                        GD.Print($"[VSCodeAttacher] {ideName} ready after {waitedMs}ms (PID: {ideProcess.Id}, was running: {wasAlreadyRunning})");
                         break;
                     }
                 }
@@ -113,13 +115,13 @@ public class VSCodeAttacher : IIdeAttacher
 
             if (ideProcess == null)
             {
-                GD.PrintErr($"[VSCodeAttacher] {(isCursor ? "Cursor" : "VS Code")} process not found after waiting");
-                GD.Print($"[VSCodeAttacher] Please press F5 in {(isCursor ? "Cursor" : "VS Code")} manually to start debugging.");
+                GD.PrintErr($"[VSCodeAttacher] {ideName} process not found after waiting");
+                GD.Print($"[VSCodeAttacher] Please press F5 in {ideName} manually to start debugging.");
                 return AttachResult.Ok();
             }
 
             // Step 3: Send F5 keypress to IDE using PowerShell
-            GD.Print($"[VSCodeAttacher] Sending F5 keypress to {(isCursor ? "Cursor" : "VS Code")}...");
+            GD.Print($"[VSCodeAttacher] Sending F5 keypress to {ideName}...");
 
             try
             {
@@ -143,12 +145,12 @@ public class VSCodeAttacher : IIdeAttacher
                 using var ps = Process.Start(psProcess);
                 ps?.WaitForExit(10000);
 
-                GD.Print($"[VSCodeAttacher] F5 keypress sent to {(isCursor ? "Cursor" : "VS Code")}.");
+                GD.Print($"[VSCodeAttacher] F5 keypress sent to {ideName}.");
             }
             catch (Exception ex)
             {
                 GD.Print($"[VSCodeAttacher] Could not send F5 keystroke: {ex.Message}");
-                GD.Print($"[VSCodeAttacher] Please press F5 in {(isCursor ? "Cursor" : "VS Code")} manually to start debugging.");
+                GD.Print($"[VSCodeAttacher] Please press F5 in {ideName} manually to start debugging.");
             }
 
             return AttachResult.Ok();

@@ -12,7 +12,8 @@ namespace ExternalDebugAttach;
 public enum IdeType
 {
     VSCode,
-    Cursor
+    Cursor,
+    AntiGravity
 }
 
 /// <summary>
@@ -24,6 +25,7 @@ public class SettingsManager
     private const string SettingIdeType = SettingPrefix + "ide_type";
     private const string SettingVSCodePath = SettingPrefix + "vscode_path";
     private const string SettingCursorPath = SettingPrefix + "cursor_path";
+    private const string SettingAntiGravityPath = SettingPrefix + "antigravity_path";
     private const string SettingAttachDelayMs = SettingPrefix + "attach_delay_ms";
 
     // Deprecated settings (for cleanup)
@@ -51,7 +53,7 @@ public class SettingsManager
         {
             _editorSettings.SetSetting(SettingIdeType, (int)IdeType.VSCode);
         }
-        AddSettingInfo(SettingIdeType, Variant.Type.Int, PropertyHint.Enum, "VSCode,Cursor");
+        AddSettingInfo(SettingIdeType, Variant.Type.Int, PropertyHint.Enum, "VSCode,Cursor,AntiGravity");
 
         // VS Code Path
         if (!_editorSettings.HasSetting(SettingVSCodePath))
@@ -66,6 +68,13 @@ public class SettingsManager
             _editorSettings.SetSetting(SettingCursorPath, "");
         }
         AddSettingInfo(SettingCursorPath, Variant.Type.String, PropertyHint.GlobalFile, "*.exe");
+
+        // AntiGravity Path
+        if (!_editorSettings.HasSetting(SettingAntiGravityPath))
+        {
+            _editorSettings.SetSetting(SettingAntiGravityPath, "");
+        }
+        AddSettingInfo(SettingAntiGravityPath, Variant.Type.String, PropertyHint.GlobalFile, "*.exe");
 
         // Attach Delay
         if (!_editorSettings.HasSetting(SettingAttachDelayMs))
@@ -106,6 +115,11 @@ public class SettingsManager
         {
             var path = (string)_editorSettings.GetSetting(SettingCursorPath);
             return string.IsNullOrEmpty(path) ? DetectCursorPath() : path;
+        }
+        else if (ideType == IdeType.AntiGravity)
+        {
+            var path = (string)_editorSettings.GetSetting(SettingAntiGravityPath);
+            return string.IsNullOrEmpty(path) ? DetectAntiGravityPath() : path;
         }
         else // VSCode
         {
@@ -291,6 +305,62 @@ public class SettingsManager
         }
 
         foreach (var path in basePaths)
+        {
+            if (File.Exists(path))
+            {
+                return path;
+            }
+        }
+
+        return "";
+    }
+
+    /// <summary>
+    /// Auto-detect AntiGravity installation path
+    /// </summary>
+    private string DetectAntiGravityPath()
+    {
+        // AntiGravity is VS Code-based, check common installation paths
+        var localAppData = SysEnv.GetFolderPath(SysEnv.SpecialFolder.LocalApplicationData);
+        var programFiles = SysEnv.GetFolderPath(SysEnv.SpecialFolder.ProgramFiles);
+        var programFilesX86 = SysEnv.GetFolderPath(SysEnv.SpecialFolder.ProgramFilesX86);
+
+        // Check PATH environment for antigravity.cmd or Antigravity.exe
+        var pathEnv = SysEnv.GetEnvironmentVariable("PATH") ?? "";
+        var paths = pathEnv.Split(Path.PathSeparator);
+
+        foreach (var p in paths)
+        {
+            try
+            {
+                var cmd = Path.Combine(p.Trim(), "antigravity.cmd");
+                if (File.Exists(cmd))
+                {
+                    var currentDir = Path.GetDirectoryName(cmd);
+                    for (int i = 0; i < 4 && !string.IsNullOrEmpty(currentDir); i++)
+                    {
+                        var exePath = Path.Combine(currentDir, "Antigravity.exe");
+                        if (File.Exists(exePath)) return exePath;
+                        currentDir = Directory.GetParent(currentDir)?.FullName;
+                    }
+                }
+
+                var directExe = Path.Combine(p.Trim(), "Antigravity.exe");
+                if (File.Exists(directExe)) return directExe;
+            }
+            catch { }
+        }
+
+        // Common AntiGravity paths on Windows
+        string[] possiblePaths =
+        {
+            Path.Combine(localAppData, "Programs", "AntiGravity", "Antigravity.exe"),
+            Path.Combine(localAppData, "Programs", "antigravity", "Antigravity.exe"),
+            Path.Combine(programFiles, "AntiGravity", "Antigravity.exe"),
+            Path.Combine(programFilesX86, "AntiGravity", "Antigravity.exe"),
+        };
+
+        foreach (var path in possiblePaths)
         {
             if (File.Exists(path))
             {
