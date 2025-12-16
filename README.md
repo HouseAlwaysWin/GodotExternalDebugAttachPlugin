@@ -67,7 +67,7 @@ When the plugin is active:
 
 ### Process Not Found (PID)
 - Ensure the project is built with C#.
-- Try increasing the **Attach Delay Ms**.
+- Rebuild the project.
 
 ### IDE Fails to Attach
 - Ensure the C# extension is installed.
