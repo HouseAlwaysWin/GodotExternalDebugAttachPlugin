@@ -8,7 +8,6 @@ One-click Run + Attach Debug to external IDE for Godot Editor.
 
 - 🚀 One-click to run game and attach debugger
 - 🔧 Supports **VS Code**, **Cursor**, and **AntiGravity**
-- ⏳ Optional wait for debugger (never miss initialization breakpoints)
 - 🎯 Auto-detect IDE and solution paths
 - ⌨️ Keyboard shortcut support: **Alt+F5**
 
