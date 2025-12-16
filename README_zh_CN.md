@@ -8,7 +8,6 @@
 
 - 🚀 一鍵執行遊戲並附加 Debugger
 - 🔧 支援 **VS Code**、**Cursor** 和 **AntiGravity**
-- ⏳ 可選的等待 Debugger 功能（確保不錯過初始化斷點）
 - 🎯 自動偵測 IDE 和 Solution 路徑
 - ⌨️ 快捷鍵支援：**Alt+F5**
 
