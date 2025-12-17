@@ -8,7 +8,6 @@ One-click Run + Attach Debug to external IDE for Godot Editor.
 
 - 🚀 One-click to run game and attach debugger
 - 🔧 Supports **VS Code**, **Cursor**, and **AntiGravity**
-- ⏳ Optional wait for debugger (never miss initialization breakpoints)
 - 🎯 Auto-detect IDE and solution paths
 - ⌨️ Keyboard shortcut support: **Alt+F5**
 
@@ -68,7 +67,7 @@ When the plugin is active:
 
 ### Process Not Found (PID)
 - Ensure the project is built with C#.
-- Try increasing the **Attach Delay Ms**.
+- Rebuild the project.
 
 ### IDE Fails to Attach
 - Ensure the C# extension is installed.
