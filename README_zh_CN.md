@@ -138,7 +138,6 @@ Plugin 在啟用時會自動註冊 `DebugWaitAutoload`，確保不會錯過初�
 ## 已知限制
 
 - **僅支援 Windows**：目前只支援 Windows 平台
-- **Debug Session 結束後可能需重啟 Godot**：由於 [Godot #78513](https://github.com/godotengine/godot/issues/78513)，.NET assembly 重載可能會失敗
 
 ## 授權
 
