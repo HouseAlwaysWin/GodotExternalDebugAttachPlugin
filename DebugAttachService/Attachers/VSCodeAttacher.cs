@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
+using CliWrap;
+using CliWrap.Buffered;
 
 namespace DebugAttachService;
 
@@ -77,11 +79,11 @@ public class VSCodeAttacher : IIdeAttacher
             bool wasAlreadyRunning = existingPids.Count > 0;
 
             int waitedMs = 0;
-            int maxWaitMs = 20000; // Max 20 seconds
+            int maxWaitMs = 25000; // Max 25 seconds
             int intervalMs = 500;
             // If IDE was already running, we need to wait for the workspace to reload
-            // Increase wait time to ensure workspace is fully loaded
-            int minWaitMs = wasAlreadyRunning ? 6000 : 5000;
+            // If IDE is newly started, wait longer for full initialization
+            int minWaitMs = wasAlreadyRunning ? 6000 : 8000;
             Process? ideProcess = null;
 
             while (waitedMs < maxWaitMs)
@@ -117,7 +119,7 @@ public class VSCodeAttacher : IIdeAttacher
             // Step 3: Send F5 keypress to IDE using PowerShell (Windows only)
             if (OperatingSystem.IsWindows())
             {
-                SendF5KeyPress(ideProcess, ideName);
+                SendF5KeyPressAsync(ideProcess, ideName).GetAwaiter().GetResult();
             }
             else
             {
@@ -134,39 +136,65 @@ public class VSCodeAttacher : IIdeAttacher
         }
     }
 
-    private void SendF5KeyPress(Process ideProcess, string ideName)
+    private async Task SendF5KeyPressAsync(Process ideProcess, string ideName)
     {
-        _log($"[VSCodeAttacher] Sending F5 keypress to {ideName}...");
+        // Send F5 multiple times to ensure it's received
+        // We can't verify if debugging actually started, so we send multiple times
+        const int sendCount = 2;
+        const int delayBetweenSends = 2000;
 
-        try
+        _log($"[VSCodeAttacher] Will send F5 {sendCount} times to ensure {ideName} receives it...");
+
+        for (int i = 1; i <= sendCount; i++)
         {
-            // Use AppActivate with process ID for reliable window activation
-            var psCommand = $"Add-Type -AssemblyName Microsoft.VisualBasic; " +
-                $"[Microsoft.VisualBasic.Interaction]::AppActivate({ideProcess.Id}); " +
-                "Start-Sleep -Milliseconds 1000; " +
-                "Add-Type -AssemblyName System.Windows.Forms; " +
-                "[System.Windows.Forms.SendKeys]::SendWait('{F5}')";
+            _log($"[VSCodeAttacher] Sending F5 keypress to {ideName} ({i}/{sendCount})...");
 
-            var psProcess = new ProcessStartInfo
+            try
             {
-                FileName = "powershell",
-                Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{psCommand}\"",
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            };
+                // Refresh process info to ensure we have the latest window handle
+                ideProcess.Refresh();
 
-            using var ps = Process.Start(psProcess);
-            ps?.WaitForExit(10000);
+                // Use AppActivate with process ID for reliable window activation
+                // Call AppActivate twice with delay to ensure window is focused
+                var psCommand = $"Add-Type -AssemblyName Microsoft.VisualBasic; " +
+                    $"[Microsoft.VisualBasic.Interaction]::AppActivate({ideProcess.Id}); " +
+                    "Start-Sleep -Milliseconds 300; " +
+                    $"[Microsoft.VisualBasic.Interaction]::AppActivate({ideProcess.Id}); " +
+                    "Start-Sleep -Milliseconds 300; " +
+                    "Add-Type -AssemblyName System.Windows.Forms; " +
+                    "[System.Windows.Forms.SendKeys]::SendWait('{F5}')";
 
-            _log($"[VSCodeAttacher] F5 keypress sent to {ideName}.");
+                var result = await Cli.Wrap("powershell")
+                    .WithArguments(new[] { "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", psCommand })
+                    .WithValidation(CommandResultValidation.None)
+                    .ExecuteBufferedAsync();
+
+                if (result.ExitCode == 0)
+                {
+                    _log($"[VSCodeAttacher] F5 keypress {i} sent to {ideName}.");
+                }
+                else
+                {
+                    _log($"[VSCodeAttacher] PowerShell exited with code {result.ExitCode}");
+                    if (!string.IsNullOrWhiteSpace(result.StandardError))
+                    {
+                        _log($"[VSCodeAttacher] Error: {result.StandardError.Trim()}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _log($"[VSCodeAttacher] Send {i} failed: {ex.Message}");
+            }
+
+            // Wait before next send
+            if (i < sendCount)
+            {
+                await Task.Delay(delayBetweenSends);
+            }
         }
-        catch (Exception ex)
-        {
-            _log($"[VSCodeAttacher] Could not send F5 keystroke: {ex.Message}");
-            _log($"[VSCodeAttacher] Please press F5 in {ideName} manually to start debugging.");
-        }
+
+        _log($"[VSCodeAttacher] Finished sending F5 to {ideName}.");
     }
 
     private void CreateLaunchJson(string launchJsonPath, int pid)
