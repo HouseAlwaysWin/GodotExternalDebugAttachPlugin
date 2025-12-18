@@ -138,7 +138,6 @@ When the game starts:
 ## Known Limitations
 
 - **Windows Only**: Currently only Windows is supported
-- **Restart Godot After Debugging**: Due to [Godot #78513](https://github.com/godotengine/godot/issues/78513), reloading .NET assemblies may fail after a debug session
 
 ## License
 
