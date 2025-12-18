@@ -4,12 +4,23 @@
 
 One-click Run + Attach Debug to external IDE for Godot Editor.
 
+## Architecture
+
+This plugin uses a **two-component architecture** to avoid C# assembly reload issues:
+
+| Component                | Language | Description                                                                  |
+| ------------------------ | -------- | ---------------------------------------------------------------------------- |
+| **Editor Plugin**        | GDScript | Handles UI, settings, and communication                                      |
+| **Debug Attach Service** | .NET 8   | Standalone process for PID detection, IDE launching, and debugger attachment |
+
 ## Features
 
 - 🚀 One-click to run game and attach debugger
 - 🔧 Supports **VS Code**, **Cursor**, and **AntiGravity**
-- 🎯 Auto-detect IDE and solution paths
-- ⌨️ Keyboard shortcut support: **Alt+F5**
+- ⏳ Built-in wait for debugger (never miss `_Ready` breakpoints)
+- 🎯 Auto-detect IDE paths and game process PID
+- ⌨️ Keyboard shortcut: **Alt+F5**
+- 🖥️ Optional Service console window for debugging
 
 ## Installation
 
@@ -22,61 +33,112 @@ One-click Run + Attach Debug to external IDE for Godot Editor.
 
 Go to **Editor** → **Editor Settings** and find the "External Debug Attach" section:
 
-| Setting | Description |
-|---------|-------------|
-| IDE Type | Select IDE: VSCode, Cursor, or AntiGravity |
-| VS Code Path | Path to VS Code executable (leave empty to auto-detect) |
-| Cursor Path | Path to Cursor executable (leave empty to auto-detect) |
-| AntiGravity Path | Path to AntiGravity executable (leave empty to auto-detect) |
+| Setting              | Description                                                 |
+| -------------------- | ----------------------------------------------------------- |
+| IDE Type             | Select IDE: VSCode, Cursor, or AntiGravity                  |
+| VS Code Path         | Path to VS Code executable (leave empty to auto-detect)     |
+| Cursor Path          | Path to Cursor executable (leave empty to auto-detect)      |
+| AntiGravity Path     | Path to AntiGravity executable (leave empty to auto-detect) |
+| Show Service Console | Show Debug Attach Service console window (for debugging)    |
+
+### Show Service Console Window
+
+To view the Debug Attach Service logs (useful for troubleshooting), enable the console window:
+
+1. Go to **Editor** → **Editor Settings**
+2. Search for **External Debug Attach**
+3. Set **Show Service Console** to **true**
+
+When enabled, pressing Alt+F5 will open a CMD window displaying:
+
+- TCP server status
+- Received request details
+- PID detection results
+- IDE launch status
+- F5 keypress status
+
+> **Tip**: If you accidentally close the Service window, you can restart it by **disabling and re-enabling the plugin**:
+>
+> 1. Go to **Project** → **Project Settings** → **Plugins**
+> 2. Uncheck **External Debug Attach**
+> 3. Check **External Debug Attach** again
 
 ## Usage
 
 1. Ensure configurations are correct.
 2. Click the **🐞 Run + Attach Debug** icon in the Godot Editor toolbar (or press `Alt+F5`).
 3. The plugin will automatically:
-   - Run the project.
-   - Detect the Godot game process PID.
-   - Launch your IDE and attach the debugger to that PID.
+   - Start the Debug Attach Service (if not running)
+   - Run the project
+   - Pause the game and wait for debugger (via DebugWaitAutoload)
+   - Detect the Godot game process PID
+   - Launch your IDE and attach the debugger
 
-## Waiting for Debugger (Autoload)
+## How It Works
 
-To ensure you don't miss breakpoints during initialization (e.g., `_Ready`), the plugin automatically registers a `DebugWait` autoload when enabled.
+1. **GDScript Plugin** sends an attach request via TCP to the Service
+2. **Debug Attach Service** (independent .NET process):
+   - Scans for Godot/dotnet game processes
+   - Auto-detects IDE installation path
+   - Creates/updates `.vscode/launch.json`
+   - Launches the IDE with the workspace
+   - Sends F5 keypress to start debugging
+3. **DebugWaitAutoload** (in game process):
+   - Pauses the game with a visual overlay
+   - Waits for debugger to attach (synchronous blocking)
+   - Resumes when debugger connects
 
-When the plugin is active:
-- The game will pause at startup, showing a **"Waiting for debugger..."** overlay.
-- It automatically resumes once the debugger attaches.
-- You can press **ESC** to skip waiting.
-- It times out and resumes automatically after 30 seconds.
+## DebugWaitAutoload
+
+The plugin automatically registers `DebugWaitAutoload` when enabled. This ensures you don't miss breakpoints during initialization (e.g., `_Ready`).
+
+When the game starts:
+
+- Shows a **"Waiting for debugger..."** overlay
+- Automatically resumes once the debugger attaches
+- Press **ESC** to skip waiting
+- Times out after 30 seconds
 
 ## IDE Support
 
 ### VS Code
-- Automatically generates/updates `.vscode/launch.json`.
-- Requires the C# extension.
-- Automatically sends `F5` to the VS Code window to start debugging.
+
+- Automatically generates/updates `.vscode/launch.json`
+- Requires the C# extension
+- Automatically sends `F5` to start debugging
 
 ### Cursor
-- Same as VS Code (uses the same debugger configuration).
-- Automatically detects Cursor installation.
+
+- Same as VS Code (uses the same debugger configuration)
+- Automatically detects Cursor installation
 
 ### AntiGravity
-- Same as VS Code (uses the same debugger configuration).
-- Automatically detects AntiGravity installation.
+
+- Same as VS Code (uses the same debugger configuration)
+- Automatically detects AntiGravity installation
 
 ## Troubleshooting
 
+### Service Not Starting
+
+- Check if another instance is already running
+- Enable **Show Service Console** to see error messages
+- Manually run `StartService.bat` to diagnose issues
+
 ### Process Not Found (PID)
-- Ensure the project is built with C#.
-- Rebuild the project.
+
+- Ensure the project is built with C#
+- The Service auto-retries up to 10 times
 
 ### IDE Fails to Attach
-- Ensure the C# extension is installed.
-- Manually select the **".NET Attach (Godot)"** configuration in your IDE.
+
+- Ensure the C# extension is installed in your IDE
+- Manually select the **".NET Attach (Godot)"** configuration
 
 ## Known Limitations
 
-- **Restart Godot After Debugging**: Due to a known issue [Godot #78513](https://github.com/godotengine/godot/issues/78513), reloading .NET assemblies often fails after a debug session, causing errors on the next run. The plugin will show a reminder popup if this error is detected, suggesting a restart.
-- **Windows Only**: Currently uses WMI for process detection, so only Windows is supported.
+- **Windows Only**: Currently only Windows is supported
+- **Restart Godot After Debugging**: Due to [Godot #78513](https://github.com/godotengine/godot/issues/78513), reloading .NET assemblies may fail after a debug session
 
 ## License
 
