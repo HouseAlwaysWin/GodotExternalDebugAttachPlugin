@@ -1,0 +1,22 @@
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2022
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ExternalDebugAttachPluginDemo", "ExternalDebugAttachPlugin\ExternalDebugAttachPluginDemo.csproj", "{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DebugAttachService", "DebugAttachService\DebugAttachService.csproj", "{580B3CBB-21C0-4590-9AAE-B52E9C3852BA}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Release|Any CPU.Build.0 = Release|Any CPU
+		{580B3CBB-21C0-4590-9AAE-B52E9C3852BA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{580B3CBB-21C0-4590-9AAE-B52E9C3852BA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{580B3CBB-21C0-4590-9AAE-B52E9C3852BA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{580B3CBB-21C0-4590-9AAE-B52E9C3852BA}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

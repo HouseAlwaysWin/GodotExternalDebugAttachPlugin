@@ -19,7 +19,7 @@ obj/
 
 # IDE specific
 .vs/
-.vscode/
+
 *.suo
 *.user
 *.userosscache
