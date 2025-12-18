@@ -23,11 +23,11 @@ One-click Run + Attach Debug to external IDE for Godot Editor.
 
 Go to **Editor** → **Editor Settings** and find the "External Debug Attach" section:
 
-| Setting | Description |
-|---------|-------------|
-| IDE Type | Select IDE: VSCode, Cursor, or AntiGravity |
-| VS Code Path | Path to VS Code executable (leave empty to auto-detect) |
-| Cursor Path | Path to Cursor executable (leave empty to auto-detect) |
+| Setting          | Description                                                 |
+| ---------------- | ----------------------------------------------------------- |
+| IDE Type         | Select IDE: VSCode, Cursor, or AntiGravity                  |
+| VS Code Path     | Path to VS Code executable (leave empty to auto-detect)     |
+| Cursor Path      | Path to Cursor executable (leave empty to auto-detect)      |
 | AntiGravity Path | Path to AntiGravity executable (leave empty to auto-detect) |
 
 ## Usage
@@ -39,38 +39,52 @@ Go to **Editor** → **Editor Settings** and find the "External Debug Attach" se
    - Detect the Godot game process PID.
    - Launch your IDE and attach the debugger to that PID.
 
-## Waiting for Debugger (Autoload)
+## Waiting for Debugger (Optional)
 
-To ensure you don't miss breakpoints during initialization (e.g., `_Ready`), the plugin automatically registers a `DebugWait` autoload when enabled.
+To ensure you don't miss breakpoints during initialization (e.g., `_Ready`), you can **optionally** enable the `DebugWait` autoload:
 
-When the plugin is active:
+1. Go to **Project** → **Project Settings** → **Autoload**.
+2. Click **Add**.
+3. Path: `res://addons/external_debug_attach/DebugWaitAutoload.cs`
+4. Name: `DebugWait`
+5. Click **Add**.
+
+When enabled:
+
 - The game will pause at startup, showing a **"Waiting for debugger..."** overlay.
 - It automatically resumes once the debugger attaches.
 - You can press **ESC** to skip waiting.
 - It times out and resumes automatically after 30 seconds.
 
+> **Note**: The autoload is no longer registered automatically to follow the "minimal intrusion" principle.
+
 ## IDE Support
 
 ### VS Code
+
 - Automatically generates/updates `.vscode/launch.json`.
 - Requires the C# extension.
 - Automatically sends `F5` to the VS Code window to start debugging.
 
 ### Cursor
+
 - Same as VS Code (uses the same debugger configuration).
 - Automatically detects Cursor installation.
 
 ### AntiGravity
+
 - Same as VS Code (uses the same debugger configuration).
 - Automatically detects AntiGravity installation.
 
 ## Troubleshooting
 
 ### Process Not Found (PID)
+
 - Ensure the project is built with C#.
 - Try increasing the **Attach Delay Ms**.
 
 ### IDE Fails to Attach
+
 - Ensure the C# extension is installed.
 - Manually select the **".NET Attach (Godot)"** configuration in your IDE.
 

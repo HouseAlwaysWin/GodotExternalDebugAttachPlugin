@@ -1,47 +1,40 @@
-using System;
 using System.Diagnostics;
-using System.IO;
-using System.Linq;
 using System.Text.Json;
-using Godot;
 
-namespace ExternalDebugAttach;
+namespace DebugAttachService;
 
 /// <summary>
-/// Attacher implementation for Visual Studio Code
-/// Creates/updates launch.json with attach configuration and opens VS Code
+/// Attacher implementation for Visual Studio Code and compatible editors (Cursor, AntiGravity)
+/// Creates/updates launch.json with attach configuration and opens the IDE
 /// </summary>
 public class VSCodeAttacher : IIdeAttacher
 {
-    public AttachResult Attach(int pid, string idePath, string solutionPath)
+    private readonly Action<string> _log;
+    private readonly Action<string> _logError;
+
+    public VSCodeAttacher(Action<string>? log = null, Action<string>? logError = null)
+    {
+        _log = log ?? Console.WriteLine;
+        _logError = logError ?? Console.Error.WriteLine;
+    }
+
+    public AttachResult Attach(int pid, string idePath, string workspacePath)
     {
         try
         {
             // Validate IDE path
             if (string.IsNullOrEmpty(idePath) || !File.Exists(idePath))
             {
-                return AttachResult.Fail($"VS Code executable not found at: {idePath}");
+                return AttachResult.Fail($"IDE executable not found at: {idePath}");
             }
 
-            // Get workspace path - prefer solution directory, fallback to project path
-            var projectPath = ProjectSettings.GlobalizePath("res://");
-            string workspacePath;
-
-            if (!string.IsNullOrEmpty(solutionPath) && File.Exists(solutionPath))
+            // Validate workspace path
+            if (string.IsNullOrEmpty(workspacePath) || !Directory.Exists(workspacePath))
             {
-                workspacePath = Path.GetDirectoryName(solutionPath) ?? projectPath;
-            }
-            else
-            {
-                workspacePath = projectPath;
+                return AttachResult.Fail($"Workspace path not found: {workspacePath}");
             }
 
-            GD.Print($"[VSCodeAttacher] Workspace path: {workspacePath}");
-
-            if (string.IsNullOrEmpty(workspacePath))
-            {
-                return AttachResult.Fail("Could not determine workspace path");
-            }
+            _log($"[VSCodeAttacher] Workspace path: {workspacePath}");
 
             // Create .vscode directory if it doesn't exist
             var vscodePath = Path.Combine(workspacePath, ".vscode");
@@ -51,7 +44,7 @@ public class VSCodeAttacher : IIdeAttacher
             var launchJsonPath = Path.Combine(vscodePath, "launch.json");
             CreateLaunchJson(launchJsonPath, pid);
 
-            GD.Print($"[VSCodeAttacher] Created launch.json at: {launchJsonPath}");
+            _log($"[VSCodeAttacher] Created launch.json at: {launchJsonPath}");
 
             // Determine which IDE we're using based on the executable name
             var exeName = Path.GetFileNameWithoutExtension(idePath);
@@ -67,7 +60,7 @@ public class VSCodeAttacher : IIdeAttacher
 
             // Step 1: Open VS Code/Cursor with the workspace
             var openArgs = $"\"{workspacePath}\" --reuse-window";
-            GD.Print($"[VSCodeAttacher] Opening workspace: \"{idePath}\" {openArgs}");
+            _log($"[VSCodeAttacher] Opening workspace: \"{idePath}\" {openArgs}");
 
             var openProcess = new ProcessStartInfo
             {
@@ -78,21 +71,22 @@ public class VSCodeAttacher : IIdeAttacher
             Process.Start(openProcess);
 
             // Step 2: Wait for VS Code/Cursor to be ready
-            GD.Print($"[VSCodeAttacher] Waiting for {ideName} to be ready...");
+            _log($"[VSCodeAttacher] Waiting for {ideName} to be ready...");
 
             // Check if IDE was already running
             bool wasAlreadyRunning = existingPids.Count > 0;
 
             int waitedMs = 0;
-            int maxWaitMs = 15000; // Max 15 seconds
+            int maxWaitMs = 20000; // Max 20 seconds
             int intervalMs = 500;
             // If IDE was already running, we need to wait for the workspace to reload
-            int minWaitMs = wasAlreadyRunning ? 5000 : 3000;
+            // Increase wait time to ensure workspace is fully loaded
+            int minWaitMs = wasAlreadyRunning ? 6000 : 5000;
             Process? ideProcess = null;
 
             while (waitedMs < maxWaitMs)
             {
-                System.Threading.Thread.Sleep(intervalMs);
+                Thread.Sleep(intervalMs);
                 waitedMs += intervalMs;
 
                 // Check if there's a matching process running
@@ -107,7 +101,7 @@ public class VSCodeAttacher : IIdeAttacher
                     // Wait enough time for IDE to fully load the workspace
                     if (waitedMs >= minWaitMs)
                     {
-                        GD.Print($"[VSCodeAttacher] {ideName} ready after {waitedMs}ms (PID: {ideProcess.Id}, was running: {wasAlreadyRunning})");
+                        _log($"[VSCodeAttacher] {ideName} ready after {waitedMs}ms (PID: {ideProcess.Id}, was running: {wasAlreadyRunning})");
                         break;
                     }
                 }
@@ -115,50 +109,63 @@ public class VSCodeAttacher : IIdeAttacher
 
             if (ideProcess == null)
             {
-                GD.PrintErr($"[VSCodeAttacher] {ideName} process not found after waiting");
-                GD.Print($"[VSCodeAttacher] Please press F5 in {ideName} manually to start debugging.");
+                _logError($"[VSCodeAttacher] {ideName} process not found after waiting");
+                _log($"[VSCodeAttacher] Please press F5 in {ideName} manually to start debugging.");
                 return AttachResult.Ok();
             }
 
-            // Step 3: Send F5 keypress to IDE using PowerShell
-            GD.Print($"[VSCodeAttacher] Sending F5 keypress to {ideName}...");
-
-            try
+            // Step 3: Send F5 keypress to IDE using PowerShell (Windows only)
+            if (OperatingSystem.IsWindows())
             {
-                // Use AppActivate with process ID for reliable window activation
-                var psCommand = $"Add-Type -AssemblyName Microsoft.VisualBasic; " +
-                    $"[Microsoft.VisualBasic.Interaction]::AppActivate({ideProcess.Id}); " +
-                    "Start-Sleep -Milliseconds 1000; " +
-                    "Add-Type -AssemblyName System.Windows.Forms; " +
-                    "[System.Windows.Forms.SendKeys]::SendWait('{F5}')";
-
-                var psProcess = new ProcessStartInfo
-                {
-                    FileName = "powershell",
-                    Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{psCommand}\"",
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true
-                };
-
-                using var ps = Process.Start(psProcess);
-                ps?.WaitForExit(10000);
-
-                GD.Print($"[VSCodeAttacher] F5 keypress sent to {ideName}.");
+                SendF5KeyPress(ideProcess, ideName);
             }
-            catch (Exception ex)
+            else
             {
-                GD.Print($"[VSCodeAttacher] Could not send F5 keystroke: {ex.Message}");
-                GD.Print($"[VSCodeAttacher] Please press F5 in {ideName} manually to start debugging.");
+                _log($"[VSCodeAttacher] Automatic F5 keypress not supported on this platform.");
+                _log($"[VSCodeAttacher] Please press F5 in {ideName} manually to start debugging.");
             }
 
             return AttachResult.Ok();
         }
         catch (Exception ex)
         {
-            GD.PrintErr($"[VSCodeAttacher] Exception: {ex.Message}");
+            _logError($"[VSCodeAttacher] Exception: {ex.Message}");
             return AttachResult.Fail($"Exception: {ex.Message}");
+        }
+    }
+
+    private void SendF5KeyPress(Process ideProcess, string ideName)
+    {
+        _log($"[VSCodeAttacher] Sending F5 keypress to {ideName}...");
+
+        try
+        {
+            // Use AppActivate with process ID for reliable window activation
+            var psCommand = $"Add-Type -AssemblyName Microsoft.VisualBasic; " +
+                $"[Microsoft.VisualBasic.Interaction]::AppActivate({ideProcess.Id}); " +
+                "Start-Sleep -Milliseconds 1000; " +
+                "Add-Type -AssemblyName System.Windows.Forms; " +
+                "[System.Windows.Forms.SendKeys]::SendWait('{F5}')";
+
+            var psProcess = new ProcessStartInfo
+            {
+                FileName = "powershell",
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{psCommand}\"",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+
+            using var ps = Process.Start(psProcess);
+            ps?.WaitForExit(10000);
+
+            _log($"[VSCodeAttacher] F5 keypress sent to {ideName}.");
+        }
+        catch (Exception ex)
+        {
+            _log($"[VSCodeAttacher] Could not send F5 keystroke: {ex.Message}");
+            _log($"[VSCodeAttacher] Please press F5 in {ideName} manually to start debugging.");
         }
     }
 

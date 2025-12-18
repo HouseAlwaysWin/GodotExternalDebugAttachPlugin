@@ -23,11 +23,11 @@
 
 在 Editor → Editor Settings 中找到 "External Debug Attach" 設定：
 
-| 設定項 | 說明 |
-|--------|------|
-| IDE Type | 選擇 IDE：VSCode、Cursor 或 AntiGravity |
-| VS Code Path | VS Code 可執行檔路徑（留空自動偵測） |
-| Cursor Path | Cursor 可執行檔路徑（留空自動偵測） |
+| 設定項           | 說明                                     |
+| ---------------- | ---------------------------------------- |
+| IDE Type         | 選擇 IDE：VSCode、Cursor 或 AntiGravity  |
+| VS Code Path     | VS Code 可執行檔路徑（留空自動偵測）     |
+| Cursor Path      | Cursor 可執行檔路徑（留空自動偵測）      |
 | AntiGravity Path | AntiGravity 可執行檔路徑（留空自動偵測） |
 
 ## 使用方法
@@ -41,38 +41,50 @@
 
 ## 等待 Debugger 附加（可選）
 
-為確保不會錯過初始化時的斷點（如 `_Ready`），plugin 會在啟用時自動註冊 Autoload：
+為確保不會錯過初始化時的斷點（如 `_Ready`），您可以**手動啟用** `DebugWait` Autoload：
 
-- **DebugWait** (`addons/external_debug_attach/DebugWaitAutoload.cs`)
+1. 進入 **Project** → **Project Settings** → **Autoload**
+2. 點擊 **Add**
+3. Path: `res://addons/external_debug_attach/DebugWaitAutoload.cs`
+4. Name: `DebugWait`
+5. 點擊 **Add**
 
-啟用 Plugin 後：
+啟用後：
+
 - 遊戲啟動時會暫停並顯示「Waiting for debugger...」
 - Debugger 附加後自動繼續
 - 按 ESC 可跳過等待
 - 超時 30 秒後自動繼續
 
+> **注意**：Autoload 不再自動註冊，遵循「最小侵入」原則。
+
 ## IDE 支援
 
 ### VS Code
+
 - 自動生成 `.vscode/launch.json`
 - 需要安裝 C# 擴充套件
 - 自動發送 F5 開始除錯
 
 ### Cursor
+
 - 與 VS Code 相同（使用相同的 Debugger 設定）
 - 自動偵測 Cursor 安裝路徑
 
 ### AntiGravity
+
 - 與 VS Code 相同（使用相同的 Debugger 設定）
 - 自動偵測 AntiGravity 安裝路徑
 
 ## 常見問題
 
 ### 找不到 PID
+
 - 確認專案已使用 C# 建置
 - Plugin 會自動重試最多 10 次
 
 ### IDE 無法附加
+
 - 確認已安裝 C# 擴充套件
 - 在 IDE 中手動選擇 ".NET Attach (Godot)" 配置
 

@@ -38,22 +38,47 @@ public partial class DebugWaitAutoload : Node
         }
 
         GD.Print("[DebugWait] Waiting for debugger to attach...");
-
-        // Save original time scale and freeze the game
-        _originalTimeScale = Engine.TimeScale;
-        Engine.TimeScale = 0;
-
-        // Also pause the scene tree for double protection
-        GetTree().Paused = true;
+        GD.Print("[DebugWait] (Press ESC in game window to skip, or wait for timeout)");
 
         // Show a visual indicator
         CreateWaitOverlay();
 
-        _waitingForDebugger = true;
-        _waitStartTime = Time.GetUnixTimeFromSystem();
+        // SYNCHRONOUS BLOCKING WAIT - this prevents other _Ready from running
+        var startTime = DateTime.Now;
+        var timeout = TimeSpan.FromSeconds(MaxWaitSeconds);
 
-        // Process this node even when paused
-        ProcessMode = ProcessModeEnum.Always;
+        while (!Debugger.IsAttached)
+        {
+            // Check timeout
+            if (DateTime.Now - startTime > timeout)
+            {
+                GD.PrintErr($"[DebugWait] Timeout after {MaxWaitSeconds}s - resuming without debugger");
+                break;
+            }
+
+            // Small delay to prevent CPU spinning
+            System.Threading.Thread.Sleep(100);
+
+            // Update label (we need to process events for display)
+            if (_waitLabel != null)
+            {
+                var remaining = MaxWaitSeconds - (DateTime.Now - startTime).TotalSeconds;
+                _waitLabel.Text = $"Waiting for debugger... ({remaining:F1}s)\nPress ESC to skip";
+            }
+        }
+
+        if (Debugger.IsAttached)
+        {
+            GD.Print("[DebugWait] Debugger attached! Resuming game...");
+        }
+
+        // Cleanup overlay
+        if (_waitLabel != null)
+        {
+            _waitLabel.GetParent()?.QueueFree();
+        }
+
+        GD.Print("[DebugWait] Game resumed");
     }
 
     public override void _Process(double delta)

@@ -11,8 +11,13 @@ config_version=5
 [application]
 
 config/name="External Debug Attach Plugin Demo"
+run/main_scene="uid://cbgok7xmtfu72"
 config/features=PackedStringArray("4.5", "C#")
 config/icon="res://icon.png"
+
+[autoload]
+
+DebugWait="res://addons/external_debug_attach/DebugWaitAutoload.cs"
 
 [dotnet]
 
