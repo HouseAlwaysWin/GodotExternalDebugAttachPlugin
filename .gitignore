@@ -14,6 +14,7 @@ mono_crash.*.json
 
 # .NET / C# build outputs
 bin/
+!ExternalDebugAttachPlugin/addons/external_debug_attach/bin/
 obj/
 *.csproj.user
 
