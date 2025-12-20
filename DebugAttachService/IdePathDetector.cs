@@ -119,13 +119,23 @@ public static class IdePathDetector
     {
         var localAppData = Environment.GetEnvironmentVariable("LOCALAPPDATA") ?? "";
         var programFiles = Environment.GetEnvironmentVariable("PROGRAMFILES") ?? "";
+        var username = Environment.UserName;
 
-        string[] possiblePaths =
+        var possiblePaths = new List<string>
         {
             Path.Combine(localAppData, "Programs", "AntiGravity", "Antigravity.exe"),
             Path.Combine(localAppData, "Programs", "antigravity", "Antigravity.exe"),
+            Path.Combine(localAppData, "Programs", "Antigravity", "Antigravity.exe"),
             Path.Combine(programFiles, "AntiGravity", "Antigravity.exe"),
         };
+
+        // Check alternative drive locations (for users with profiles on D:, E:, etc.)
+        foreach (var drive in DriveInfo.GetDrives().Where(d => d.IsReady && d.DriveType == DriveType.Fixed))
+        {
+            possiblePaths.Add(Path.Combine(drive.Name, "Users", username, "AppData", "Local", "Programs", "Antigravity", "Antigravity.exe"));
+            possiblePaths.Add(Path.Combine(drive.Name, "Users", username, "AppData", "Local", "Programs", "antigravity", "Antigravity.exe"));
+            possiblePaths.Add(Path.Combine(drive.Name, "Users", username, "AppData", "Local", "Programs", "AntiGravity", "Antigravity.exe"));
+        }
 
         foreach (var path in possiblePaths)
         {
@@ -133,6 +143,31 @@ public static class IdePathDetector
             {
                 return path;
             }
+        }
+
+        // Check PATH for antigravity.cmd
+        var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? "";
+        foreach (var dir in pathEnv.Split(Path.PathSeparator))
+        {
+            try
+            {
+                var antigravityCmdPath = Path.Combine(dir.Trim(), "antigravity.cmd");
+                if (File.Exists(antigravityCmdPath))
+                {
+                    // Navigate up to find Antigravity.exe
+                    var currentDir = Path.GetDirectoryName(antigravityCmdPath);
+                    for (int i = 0; i < 4 && !string.IsNullOrEmpty(currentDir); i++)
+                    {
+                        var exePath = Path.Combine(currentDir, "Antigravity.exe");
+                        if (File.Exists(exePath))
+                        {
+                            return exePath;
+                        }
+                        currentDir = Directory.GetParent(currentDir)?.FullName;
+                    }
+                }
+            }
+            catch { }
         }
 
         return "";
