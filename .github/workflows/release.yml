@@ -18,11 +18,27 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build Debug Attach Service
+        run: |
+          cd DebugAttachService
+          dotnet publish -c Release -r win-x64 --self-contained false -o ../ExternalDebugAttachPlugin/addons/external_debug_attach/bin
+
+      - name: Create Release Package
+        run: |
+          cd ExternalDebugAttachPlugin/addons
+          zip -r ../../external_debug_attach_plugin.zip external_debug_attach
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           generate_release_notes: true
           draft: false
+          files: external_debug_attach_plugin.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
