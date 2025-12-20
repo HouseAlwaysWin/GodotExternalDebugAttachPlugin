@@ -136,13 +136,6 @@ func _unregister_autoload() -> void:
 func _get_ide_type() -> IdeType:
 	return _editor_settings.get_setting(SETTING_IDE_TYPE) as IdeType
 
-func _is_csharp_project() -> bool:
-	# Check if project has C# feature enabled
-	var features = ProjectSettings.get_setting("application/config/features")
-	if features is PackedStringArray:
-		return "C#" in features
-	return false
-
 func _kill_service() -> void:
 	# Kill any running DebugAttachService process
 	print("[ExternalDebugAttach] Killing any running Service instances...")
