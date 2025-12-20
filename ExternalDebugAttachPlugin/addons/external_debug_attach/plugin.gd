@@ -15,7 +15,7 @@ const SETTING_ANTIGRAVITY_PATH := SETTING_PREFIX + "antigravity_path"
 const SETTING_SHOW_SERVICE_CONSOLE := SETTING_PREFIX + "show_service_console"
 
 const AUTOLOAD_NAME := "DebugWait"
-const AUTOLOAD_PATH := "res://addons/external_debug_attach/DebugWaitAutoload.cs"
+const AUTOLOAD_PATH := "res://addons/external_debug_attach/DebugWaitAutoload.gd"
 
 enum IdeType {VSCode, Cursor, AntiGravity}
 
@@ -135,6 +135,13 @@ func _unregister_autoload() -> void:
 
 func _get_ide_type() -> IdeType:
 	return _editor_settings.get_setting(SETTING_IDE_TYPE) as IdeType
+
+func _is_csharp_project() -> bool:
+	# Check if project has C# feature enabled
+	var features = ProjectSettings.get_setting("application/config/features")
+	if features is PackedStringArray:
+		return "C#" in features
+	return false
 
 func _kill_service() -> void:
 	# Kill any running DebugAttachService process
