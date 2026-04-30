@@ -13,6 +13,8 @@ const SETTING_VSCODE_PATH := SETTING_PREFIX + "vscode_path"
 const SETTING_CURSOR_PATH := SETTING_PREFIX + "cursor_path"
 const SETTING_ANTIGRAVITY_PATH := SETTING_PREFIX + "antigravity_path"
 const SETTING_SHOW_SERVICE_CONSOLE := SETTING_PREFIX + "show_service_console"
+const SETTING_AUTO_REGISTER_AUTOLOAD := SETTING_PREFIX + "auto_register_debugwait_autoload"
+const SETTING_DEBUG_WAIT_SECONDS := SETTING_PREFIX + "debug_wait_seconds"
 
 const AUTOLOAD_NAME := "DebugWait"
 const AUTOLOAD_PATH := "res://addons/external_debug_attach/DebugWaitAutoload.gd"
@@ -23,9 +25,13 @@ var _button: Button
 var _editor_settings: EditorSettings
 var _tcp_client: StreamPeerTCP
 var _service_process_id: int = -1
+var _is_windows: bool = OS.get_name() == "Windows"
 
 func _enter_tree() -> void:
 	print("[ExternalDebugAttach] GDScript plugin loaded")
+	if not _is_windows:
+		push_warning("[ExternalDebugAttach] This plugin currently supports Windows only.")
+		return
 	
 	_editor_settings = EditorInterface.get_editor_settings()
 	_initialize_settings()
@@ -56,13 +62,18 @@ func _enter_tree() -> void:
 	# Ensure service is running
 	_ensure_service_running()
 	
-	# Register DebugWait Autoload
-	_register_autoload()
+	# Register DebugWait Autoload only when enabled
+	if _is_auto_register_autoload_enabled():
+		_register_autoload()
+	else:
+		_unregister_autoload()
 	
 	print("[ExternalDebugAttach] Ready with shortcut Alt+F5")
 
 func _exit_tree() -> void:
 	print("[ExternalDebugAttach] Unloading...")
+	if not _is_windows:
+		return
 	
 	if _button:
 		_button.pressed.disconnect(_on_button_pressed)
@@ -77,8 +88,9 @@ func _exit_tree() -> void:
 	# Kill the service process we started
 	_kill_service()
 	
-	# Unregister Autoload
-	_unregister_autoload()
+	# Unregister Autoload only when auto-register mode is enabled
+	if _is_auto_register_autoload_enabled():
+		_unregister_autoload()
 	
 	print("[ExternalDebugAttach] Unloaded")
 
@@ -108,6 +120,16 @@ func _initialize_settings() -> void:
 		_editor_settings.set_setting(SETTING_SHOW_SERVICE_CONSOLE, false)
 	_add_setting_info(SETTING_SHOW_SERVICE_CONSOLE, TYPE_BOOL, PROPERTY_HINT_NONE, "")
 
+	# Auto register DebugWait autoload
+	if not _editor_settings.has_setting(SETTING_AUTO_REGISTER_AUTOLOAD):
+		_editor_settings.set_setting(SETTING_AUTO_REGISTER_AUTOLOAD, true)
+	_add_setting_info(SETTING_AUTO_REGISTER_AUTOLOAD, TYPE_BOOL, PROPERTY_HINT_NONE, "")
+
+	# Debug wait seconds shown in countdown overlay
+	if not _editor_settings.has_setting(SETTING_DEBUG_WAIT_SECONDS):
+		_editor_settings.set_setting(SETTING_DEBUG_WAIT_SECONDS, 5.0)
+	_add_setting_info(SETTING_DEBUG_WAIT_SECONDS, TYPE_FLOAT, PROPERTY_HINT_RANGE, "0.0,30.0,0.1")
+
 func _add_setting_info(name: String, type: int, hint: int, hint_string: String) -> void:
 	_editor_settings.add_property_info({
 		"name": name,
@@ -133,13 +155,26 @@ func _unregister_autoload() -> void:
 	ProjectSettings.save()
 	print("[ExternalDebugAttach] Unregistered autoload '", AUTOLOAD_NAME, "'")
 
-func _get_ide_type() -> IdeType:
-	return _editor_settings.get_setting(SETTING_IDE_TYPE) as IdeType
+func _is_auto_register_autoload_enabled() -> bool:
+	return _editor_settings.get_setting(SETTING_AUTO_REGISTER_AUTOLOAD) == true
+
+func _get_ide_type() -> int:
+	return int(_editor_settings.get_setting(SETTING_IDE_TYPE))
+
+func _get_debug_wait_seconds() -> float:
+	return float(_editor_settings.get_setting(SETTING_DEBUG_WAIT_SECONDS))
+
+func _sync_debugwait_settings() -> void:
+	ProjectSettings.set_setting("external_debug_attach/debug_wait_seconds", _get_debug_wait_seconds())
+	ProjectSettings.save()
 
 func _kill_service() -> void:
-	# Kill any running DebugAttachService process
-	print("[ExternalDebugAttach] Killing any running Service instances...")
-	OS.execute("taskkill", ["/IM", "DebugAttachService.exe", "/F"], [], false)
+	if _service_process_id <= 0:
+		print("[ExternalDebugAttach] No owned Service PID to stop")
+		return
+	print("[ExternalDebugAttach] Stopping owned Service PID: ", _service_process_id)
+	OS.execute("taskkill", ["/PID", str(_service_process_id), "/F"], [], false)
+	_service_process_id = -1
 
 func _get_service_path() -> String:
 	var plugin_path := ProjectSettings.globalize_path("res://addons/external_debug_attach/")
@@ -156,27 +191,12 @@ func _get_service_path() -> String:
 	
 	return service_path
 
-func _is_service_running() -> bool:
-	var tcp := StreamPeerTCP.new()
-	var err := tcp.connect_to_host(SERVICE_HOST, SERVICE_PORT)
-	if err != OK:
-		return false
-	
-	# Wait for connection
-	for i in range(10):
-		tcp.poll()
-		if tcp.get_status() == StreamPeerTCP.STATUS_CONNECTED:
-			tcp.disconnect_from_host()
-			return true
-		elif tcp.get_status() == StreamPeerTCP.STATUS_ERROR:
-			return false
-		await get_tree().process_frame
-	
-	tcp.disconnect_from_host()
-	return false
-
 func _ensure_service_running() -> void:
-	# Check if service is already running - use a simple async approach
+	_sync_debugwait_settings()
+	_ensure_service_running_async()
+
+func _ensure_service_running_async() -> void:
+	# Check if service is already running - non-blocking polling
 	var tcp := StreamPeerTCP.new()
 	tcp.connect_to_host(SERVICE_HOST, SERVICE_PORT)
 	
@@ -189,8 +209,7 @@ func _ensure_service_running() -> void:
 			return
 		elif tcp.get_status() == StreamPeerTCP.STATUS_ERROR:
 			break
-		# Small delay using OS
-		OS.delay_msec(50)
+		await get_tree().process_frame
 	
 	tcp.disconnect_from_host()
 	
@@ -221,14 +240,17 @@ func _on_button_pressed() -> void:
 	_run_and_attach()
 
 func _run_and_attach() -> void:
+	# Always sync latest wait seconds before launching game.
+	_sync_debugwait_settings()
+
 	# Step 1: Run the project
 	EditorInterface.play_main_scene()
 	print("[ExternalDebugAttach] Project started")
 	
 	# Step 2: Notify Service to do the attach (Service handles everything)
-	_notify_service()
+	_notify_service_async()
 
-func _notify_service() -> void:
+func _notify_service_async() -> void:
 	print("[ExternalDebugAttach] Notifying Debug Attach Service...")
 	
 	var tcp := StreamPeerTCP.new()
@@ -245,7 +267,7 @@ func _notify_service() -> void:
 		elif tcp.get_status() == StreamPeerTCP.STATUS_ERROR:
 			printerr("[ExternalDebugAttach] Connection error")
 			return
-		OS.delay_msec(50)
+		await get_tree().process_frame
 	
 	if tcp.get_status() != StreamPeerTCP.STATUS_CONNECTED:
 		printerr("[ExternalDebugAttach] Connection timeout")
@@ -266,7 +288,8 @@ func _notify_service() -> void:
 		"pid": 0,
 		"engine": "godot",
 		"editor": editor,
-		"workspacePath": ProjectSettings.globalize_path("res://")
+		"workspacePath": ProjectSettings.globalize_path("res://"),
+		"idePath": _get_configured_ide_path(ide_type)
 	}
 	
 	var json := JSON.stringify(request)
@@ -279,6 +302,15 @@ func _notify_service() -> void:
 		if tcp.get_available_bytes() > 0:
 			print("[ExternalDebugAttach] Response: ", tcp.get_utf8_string(tcp.get_available_bytes()))
 			break
-		OS.delay_msec(50)
+		await get_tree().process_frame
 	
 	tcp.disconnect_from_host()
+
+func _get_configured_ide_path(ide_type: int) -> String:
+	match ide_type:
+		IdeType.Cursor:
+			return str(_editor_settings.get_setting(SETTING_CURSOR_PATH))
+		IdeType.AntiGravity:
+			return str(_editor_settings.get_setting(SETTING_ANTIGRAVITY_PATH))
+		_:
+			return str(_editor_settings.get_setting(SETTING_VSCODE_PATH))

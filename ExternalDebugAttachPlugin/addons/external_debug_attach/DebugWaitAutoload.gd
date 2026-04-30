@@ -7,6 +7,7 @@ extends Node
 
 ## Maximum time to wait (in seconds)
 @export var max_wait_seconds: float = 5.0
+const PROJECT_SETTING_DEBUG_WAIT_SECONDS := "external_debug_attach/debug_wait_seconds"
 
 var _wait_label: Label
 var _start_time: float
@@ -16,6 +17,9 @@ func _ready() -> void:
 	if not OS.is_debug_build():
 		print("[DebugWait] Release build - skipping wait")
 		return
+
+	if ProjectSettings.has_setting(PROJECT_SETTING_DEBUG_WAIT_SECONDS):
+		max_wait_seconds = float(ProjectSettings.get_setting(PROJECT_SETTING_DEBUG_WAIT_SECONDS))
 	
 	# For GDScript, we just provide a short delay for debugger readiness
 	print("[DebugWait] Waiting for debugger to be ready...")
