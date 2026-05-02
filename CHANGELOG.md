@@ -1,6 +1,26 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to this project are documented in this file.
+
+How to prepare a release:
+
+1. Add a **new section** at the top (below this intro / `[Unreleased]` block) using exactly this heading pattern so `release.ps1` can find it:
+   - `## [X.Y.Z] - YYYY-MM-DD`
+   - Example: `## [2.1.2] - 2026-05-02`
+2. Put bullets under `### Added`, `### Changed`, `### Fixed` as needed.
+3. Run `.\release.ps1 -Version "X.Y.Z"`.
+
+Only the section for that version is copied into the GitHub Release description; the full file stays in the repo.
+
+## [Unreleased]
+
+### Added
+
+### Changed
+
+### Fixed
+
+---
 
 ## [2.0.0] - 2025-12-18
 
