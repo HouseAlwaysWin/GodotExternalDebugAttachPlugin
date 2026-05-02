@@ -33,4 +33,4 @@ enabled=PackedStringArray("res://addons/external_debug_attach/plugin.cfg")
 
 [external_debug_attach]
 
-debug_wait_seconds=5.0
+debug_wait_seconds=30.0

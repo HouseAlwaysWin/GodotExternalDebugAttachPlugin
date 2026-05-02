@@ -27,6 +27,8 @@ var _button: Button
 var _editor_settings: EditorSettings
 var _tcp_client: StreamPeerTCP
 var _service_process_id: int = -1
+## Tracks whether we spawned the listener with a visible CMD window (cmd /c start); background PID alone is unreliable.
+var _service_started_with_console: bool = false
 var _is_windows: bool = OS.get_name() == "Windows"
 
 func _enter_tree() -> void:
@@ -171,12 +173,23 @@ func _sync_debugwait_settings() -> void:
 	ProjectSettings.save()
 
 func _kill_service() -> void:
-	if _service_process_id <= 0:
-		print("[ExternalDebugAttach] No owned Service PID to stop")
+	if not _is_windows:
 		return
-	print("[ExternalDebugAttach] Stopping owned Service PID: ", _service_process_id)
-	OS.execute("taskkill", ["/PID", str(_service_process_id), "/F"], [], false)
+	if _service_process_id > 0:
+		print("[ExternalDebugAttach] Stopping owned Service PID: ", _service_process_id)
+		OS.execute("taskkill", ["/PID", str(_service_process_id), "/F"], [], false, false)
 	_service_process_id = -1
+	_kill_windows_process_listening_on_port(SERVICE_PORT)
+	_service_started_with_console = false
+
+func _kill_windows_process_listening_on_port(port: int) -> void:
+	var ps := (
+		"Get-NetTCPConnection -LocalPort %d -ErrorAction SilentlyContinue "
+		+ "| ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"
+	) % port
+	var exit_code := OS.execute("powershell.exe", ["-NoProfile", "-Command", ps], [], false, false)
+	if exit_code < 0:
+		push_warning("[ExternalDebugAttach] Could not run PowerShell to free port %d (exit cleanup may be incomplete)" % port)
 
 func _get_service_path() -> String:
 	var plugin_path := ProjectSettings.globalize_path("res://addons/external_debug_attach/")
@@ -219,8 +232,31 @@ func _wait_until_service_listening(max_frames: int) -> bool:
 
 func _ensure_service_running_async() -> bool:
 	_sync_debugwait_settings()
-	if await _wait_until_service_listening(SERVICE_READY_QUICK_FRAMES):
-		print("[ExternalDebugAttach] Debug Attach Service is already running")
+	var show_console: bool = _editor_settings.get_setting(SETTING_SHOW_SERVICE_CONSOLE)
+	var restart_attempts := 0
+	const MAX_CONSOLE_RESTARTS := 2
+
+	# If port is open but user wants a visible console and we only started a background service earlier, kill and respawn.
+	while await _wait_until_service_listening(SERVICE_READY_QUICK_FRAMES):
+		if show_console and not _service_started_with_console and restart_attempts < MAX_CONSOLE_RESTARTS:
+			print(
+				"[ExternalDebugAttach] Restarting Debug Attach Service with visible console ",
+				"(Editor Settings → External Debug Attach → Show Service Console)"
+			)
+			_kill_windows_process_listening_on_port(SERVICE_PORT)
+			await get_tree().create_timer(0.4).timeout
+			restart_attempts += 1
+			continue
+		if show_console and _service_started_with_console:
+			print("[ExternalDebugAttach] Debug Attach Service is already running (console window)")
+		elif show_console and not _service_started_with_console:
+			push_warning(
+				"[ExternalDebugAttach] Could not switch to console window (port still in use?). Attach will continue; "
+				+ "try closing any DebugAttachService.exe or disable/enable the plugin."
+			)
+			print("[ExternalDebugAttach] Debug Attach Service is already running (background process)")
+		else:
+			print("[ExternalDebugAttach] Debug Attach Service is already running")
 		return true
 
 	var service_path := _get_service_path()
@@ -228,20 +264,25 @@ func _ensure_service_running_async() -> bool:
 		printerr("[ExternalDebugAttach] Service not found at: ", service_path)
 		return false
 
-	var show_console: bool = _editor_settings.get_setting(SETTING_SHOW_SERVICE_CONSOLE)
 	print("[ExternalDebugAttach] Starting Debug Attach Service (console: ", show_console, ")")
 
 	if show_console:
 		var args := ["/c", 'start "DebugAttachService" "' + service_path + '" --port ' + str(SERVICE_PORT)]
-		_service_process_id = OS.create_process("cmd.exe", args)
+		var cmd_pid := OS.create_process("cmd.exe", args)
+		if cmd_pid <= 0:
+			printerr("[ExternalDebugAttach] Failed to start service (cmd)")
+			return false
+		# Child is started via `start`; cmd PID is not the listener — stop via port in _kill_service.
+		_service_process_id = -1
+		_service_started_with_console = true
 	else:
 		_service_process_id = OS.create_process(service_path, ["--port", str(SERVICE_PORT)])
+		_service_started_with_console = false
+		if _service_process_id <= 0:
+			printerr("[ExternalDebugAttach] Failed to start service")
+			return false
+		print("[ExternalDebugAttach] Service started with PID: ", _service_process_id)
 
-	if _service_process_id <= 0:
-		printerr("[ExternalDebugAttach] Failed to start service")
-		return false
-
-	print("[ExternalDebugAttach] Service started with PID: ", _service_process_id)
 	if await _wait_until_service_listening(SERVICE_READY_WAIT_FRAMES):
 		return true
 
