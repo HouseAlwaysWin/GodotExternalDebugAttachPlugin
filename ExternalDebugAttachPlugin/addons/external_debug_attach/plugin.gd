@@ -18,6 +18,8 @@ const SETTING_DEBUG_WAIT_SECONDS := SETTING_PREFIX + "debug_wait_seconds"
 
 const AUTOLOAD_NAME := "DebugWait"
 const AUTOLOAD_PATH := "res://addons/external_debug_attach/DebugWaitAutoload.gd"
+const SERVICE_READY_QUICK_FRAMES := 30
+const SERVICE_READY_WAIT_FRAMES := 300
 
 enum IdeType {VSCode, Cursor, AntiGravity}
 
@@ -195,48 +197,62 @@ func _ensure_service_running() -> void:
 	_sync_debugwait_settings()
 	_ensure_service_running_async()
 
-func _ensure_service_running_async() -> void:
-	# Check if service is already running - non-blocking polling
-	var tcp := StreamPeerTCP.new()
-	tcp.connect_to_host(SERVICE_HOST, SERVICE_PORT)
-	
-	# Quick poll to check connection
-	for i in range(5):
-		tcp.poll()
-		if tcp.get_status() == StreamPeerTCP.STATUS_CONNECTED:
-			print("[ExternalDebugAttach] Debug Attach Service is already running")
-			tcp.disconnect_from_host()
-			return
-		elif tcp.get_status() == StreamPeerTCP.STATUS_ERROR:
-			break
+## Returns true when TCP accepts connections on SERVICE_PORT (service is listening).
+func _wait_until_service_listening(max_frames: int) -> bool:
+	for _i in range(max_frames):
+		var tcp := StreamPeerTCP.new()
+		if tcp.connect_to_host(SERVICE_HOST, SERVICE_PORT) != OK:
+			await get_tree().process_frame
+			continue
+		for _j in range(10):
+			tcp.poll()
+			var status := tcp.get_status()
+			if status == StreamPeerTCP.STATUS_CONNECTED:
+				tcp.disconnect_from_host()
+				return true
+			if status == StreamPeerTCP.STATUS_ERROR:
+				break
+			await get_tree().process_frame
+		tcp.disconnect_from_host()
 		await get_tree().process_frame
-	
-	tcp.disconnect_from_host()
-	
-	# Service not running, start it
+	return false
+
+func _ensure_service_running_async() -> bool:
+	_sync_debugwait_settings()
+	if await _wait_until_service_listening(SERVICE_READY_QUICK_FRAMES):
+		print("[ExternalDebugAttach] Debug Attach Service is already running")
+		return true
+
 	var service_path := _get_service_path()
 	if not FileAccess.file_exists(service_path):
 		printerr("[ExternalDebugAttach] Service not found at: ", service_path)
-		return
-	
+		return false
+
 	var show_console: bool = _editor_settings.get_setting(SETTING_SHOW_SERVICE_CONSOLE)
 	print("[ExternalDebugAttach] Starting Debug Attach Service (console: ", show_console, ")")
-	
+
 	if show_console:
-		# Use cmd /c start to open a visible console window
 		var args := ["/c", 'start "DebugAttachService" "' + service_path + '" --port ' + str(SERVICE_PORT)]
 		_service_process_id = OS.create_process("cmd.exe", args)
 	else:
-		# Start in background (no visible window)
 		_service_process_id = OS.create_process(service_path, ["--port", str(SERVICE_PORT)])
-	
-	if _service_process_id > 0:
-		print("[ExternalDebugAttach] Service started with PID: ", _service_process_id)
-	else:
+
+	if _service_process_id <= 0:
 		printerr("[ExternalDebugAttach] Failed to start service")
+		return false
+
+	print("[ExternalDebugAttach] Service started with PID: ", _service_process_id)
+	if await _wait_until_service_listening(SERVICE_READY_WAIT_FRAMES):
+		return true
+
+	printerr("[ExternalDebugAttach] Service did not become ready in time (port ", SERVICE_PORT, ")")
+	return false
 
 func _on_button_pressed() -> void:
 	print("[ExternalDebugAttach] Button pressed - Run + Attach Debug")
+	if not await _ensure_service_running_async():
+		printerr("[ExternalDebugAttach] Cannot run attach: service unavailable")
+		return
 	_run_and_attach()
 
 func _run_and_attach() -> void:
