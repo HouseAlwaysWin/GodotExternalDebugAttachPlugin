@@ -1,82 +1,66 @@
-@tool
 extends Node
 
-## GDScript version of DebugWait Autoload
-## For GDScript projects, this provides a configurable startup delay
-## to allow time for the debugger to be ready
+## Waits on the main thread at startup so scene/C# _Ready runs *after* the wait.
+## During a synchronous `_ready()` block the engine often does not paint the first frame yet,
+## so Control overlays may never appear (gray/white window). Use window title + prints instead.
 
-## Maximum time to wait (in seconds)
-@export var max_wait_seconds: float = 5.0
 const PROJECT_SETTING_DEBUG_WAIT_SECONDS := "external_debug_attach/debug_wait_seconds"
 
-var _wait_label: Label
-var _start_time: float
+@export var max_wait_seconds: float = 12.0
+
+var _saved_window_title: String = ""
+
 
 func _ready() -> void:
-	# Only wait if running from editor (debug mode)
+	if Engine.is_editor_hint():
+		return
+
 	if not OS.is_debug_build():
-		print("[DebugWait] Release build - skipping wait")
+		print("[DebugWait] Release build — skipping wait")
 		return
 
 	if ProjectSettings.has_setting(PROJECT_SETTING_DEBUG_WAIT_SECONDS):
 		max_wait_seconds = float(ProjectSettings.get_setting(PROJECT_SETTING_DEBUG_WAIT_SECONDS))
-	
-	# For GDScript, we just provide a short delay for debugger readiness
-	print("[DebugWait] Waiting for debugger to be ready...")
-	print("[DebugWait] (Press ESC in game window to skip)")
-	
-	# Show a visual indicator
-	_create_wait_overlay()
-	_start_time = Time.get_unix_time_from_system()
-	
-	# Use a timer instead of blocking
-	set_process(true)
 
-func _process(delta: float) -> void:
-	var elapsed := Time.get_unix_time_from_system() - _start_time
-	
-	# Check for timeout
-	if elapsed >= max_wait_seconds:
-		print("[DebugWait] Wait complete - resuming game")
-		_cleanup()
+	if max_wait_seconds <= 0.0:
+		print("[DebugWait] Wait disabled (debug_wait_seconds <= 0)")
 		return
-	
-	# Update the wait label
-	if _wait_label:
-		var remaining := max_wait_seconds - elapsed
-		_wait_label.text = "Waiting for debugger... (%.1fs)\nPress ESC to skip" % remaining
-	
-	# Allow user to skip by pressing ESC
-	if Input.is_action_just_pressed("ui_cancel"):
-		print("[DebugWait] User skipped wait")
-		_cleanup()
 
-func _create_wait_overlay() -> void:
-	# Create a simple overlay to indicate waiting
-	var overlay := ColorRect.new()
-	overlay.color = Color(0, 0, 0, 0.7)
-	overlay.anchors_preset = Control.PRESET_FULL_RECT
-	
-	_wait_label = Label.new()
-	_wait_label.text = "Waiting for debugger..."
-	_wait_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_wait_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_wait_label.anchors_preset = Control.PRESET_FULL_RECT
-	_wait_label.add_theme_color_override("font_color", Color.WHITE)
-	_wait_label.add_theme_font_size_override("font_size", 24)
-	
-	var canvas_layer := CanvasLayer.new()
-	canvas_layer.layer = 100
-	canvas_layer.add_child(overlay)
-	canvas_layer.add_child(_wait_label)
-	add_child(canvas_layer)
+	print("[DebugWait] Blocking startup up to %.1fs (main scene loads after this)." % max_wait_seconds)
+	print("[DebugWait] Watch the game WINDOW TITLE for countdown. Space = continue | Esc = skip")
+	print("[DebugWait] If keys don’t respond, wait for timeout — input may not update during this phase.")
 
-func _cleanup() -> void:
-	set_process(false)
-	
-	# Remove overlay
-	for child in get_children():
-		if child is CanvasLayer:
-			child.queue_free()
-	
-	print("[DebugWait] Game resumed")
+	var w := get_window()
+	if w:
+		_saved_window_title = w.title
+
+	var deadline_usec := Time.get_ticks_usec() + int(max_wait_seconds * 1_000_000.0)
+	var last_print_sec := -1
+
+	while Time.get_ticks_usec() < deadline_usec:
+		var remaining := (deadline_usec - Time.get_ticks_usec()) / 1_000_000.0
+		remaining = max(remaining, 0.0)
+
+		var up_sec := int(ceil(remaining))
+		if w:
+			w.title = "%s  |  DebugWait %ds  |  Space=go Esc=skip" % [_saved_window_title, up_sec]
+
+		var sec_left := int(floor(remaining))
+		if sec_left != last_print_sec:
+			last_print_sec = sec_left
+			print("[DebugWait] %ds left…" % up_sec)
+
+		if Input.is_physical_key_pressed(KEY_ESCAPE):
+			print("[DebugWait] User skipped (Esc)")
+			break
+
+		if Input.is_physical_key_pressed(KEY_SPACE):
+			print("[DebugWait] User continued early (Space)")
+			break
+
+		OS.delay_usec(50_000)
+
+	if w and _saved_window_title != "":
+		w.title = _saved_window_title
+
+	print("[DebugWait] Wait finished — loading main scene")

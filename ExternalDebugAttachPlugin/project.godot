@@ -19,6 +19,10 @@ run/main_scene="uid://cbgok7xmtfu72"
 config/features=PackedStringArray("4.6", "C#")
 config/icon="res://icon.png"
 
+[autoload]
+
+DebugWait="res://addons/external_debug_attach/DebugWaitAutoload.gd"
+
 [dotnet]
 
 project/assembly_name="ExternalDebugAttachPluginDemo"
@@ -29,4 +33,4 @@ enabled=PackedStringArray("res://addons/external_debug_attach/plugin.cfg")
 
 [external_debug_attach]
 
-debug_wait_seconds=5.0
+debug_wait_seconds=10.2

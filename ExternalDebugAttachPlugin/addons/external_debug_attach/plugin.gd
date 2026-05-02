@@ -131,8 +131,8 @@ func _initialize_settings() -> void:
 
 	# Debug wait seconds shown in countdown overlay
 	if not _editor_settings.has_setting(SETTING_DEBUG_WAIT_SECONDS):
-		_editor_settings.set_setting(SETTING_DEBUG_WAIT_SECONDS, 5.0)
-	_add_setting_info(SETTING_DEBUG_WAIT_SECONDS, TYPE_FLOAT, PROPERTY_HINT_RANGE, "0.0,30.0,0.1")
+		_editor_settings.set_setting(SETTING_DEBUG_WAIT_SECONDS, 12.0)
+	_add_setting_info(SETTING_DEBUG_WAIT_SECONDS, TYPE_FLOAT, PROPERTY_HINT_RANGE, "0.0,60.0,0.1")
 
 func _add_setting_info(name: String, type: int, hint: int, hint_string: String) -> void:
 	_editor_settings.add_property_info({

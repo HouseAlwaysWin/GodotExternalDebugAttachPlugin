@@ -33,13 +33,15 @@ This plugin uses a **two-component architecture** to avoid C# assembly reload is
 
 Go to **Editor** → **Editor Settings** and find the "External Debug Attach" section:
 
-| Setting              | Description                                                 |
-| -------------------- | ----------------------------------------------------------- |
-| IDE Type             | Select IDE: VSCode, Cursor, or AntiGravity                  |
-| VS Code Path         | Path to VS Code executable (leave empty to auto-detect)     |
-| Cursor Path          | Path to Cursor executable (leave empty to auto-detect)      |
-| AntiGravity Path     | Path to AntiGravity executable (leave empty to auto-detect) |
-| Show Service Console | Show Debug Attach Service console window (for debugging)    |
+| Setting                       | Description                                                          |
+| ----------------------------- | -------------------------------------------------------------------- |
+| IDE Type                      | Select IDE: VSCode, Cursor, or AntiGravity                           |
+| VS Code Path                  | Path to VS Code executable (leave empty to auto-detect)              |
+| Cursor Path                   | Path to Cursor executable (leave empty to auto-detect)              |
+| AntiGravity Path              | Path to AntiGravity executable (leave empty to auto-detect)          |
+| Show Service Console          | Show Debug Attach Service console window (for debugging)             |
+| Auto register DebugWait       | Registers `DebugWait` autoload (recommended **on**)                   |
+| Debug wait seconds            | Main-thread block **before** main scene loads (default **12** s)      |
 
 ### Show Service Console Window
 
@@ -69,10 +71,9 @@ When enabled, pressing Alt+F5 will open a CMD window displaying:
 2. Click the **🐞 Run + Attach Debug** icon in the Godot Editor toolbar (or press `Alt+F5`).
 3. The plugin will automatically:
    - Start the Debug Attach Service (if not running)
-   - Run the project
-   - Pause the game and wait for debugger (via DebugWaitAutoload)
+   - Run the project (**DebugWaitAutoload** blocks the game tree until the wait ends — see below)
    - Detect the Godot game process PID
-   - Launch your IDE and attach the debugger
+   - Launch your IDE and attach the debugger (can take several seconds after the game window appears)
 
 ## How It Works
 
@@ -84,20 +85,23 @@ When enabled, pressing Alt+F5 will open a CMD window displaying:
    - Launches the IDE with the workspace
    - Sends F5 keypress to start debugging
 3. **DebugWaitAutoload** (in game process):
-   - Pauses the game with a visual overlay
-   - Waits for debugger to attach (synchronous blocking)
-   - Resumes when debugger connects
+   - Blocks **on the main thread** at startup so your main scene (and C# `_Ready`) runs **after** the wait
+   - Updates the game **window title** with a countdown (during this phase the game often **cannot draw** the first frame yet, so there is no reliable on-screen overlay)
+   - Does **not** detect “debugger attached” — it only buys time for you to attach from the IDE
 
 ## DebugWaitAutoload
 
-The plugin automatically registers `DebugWaitAutoload` when enabled. This ensures you don't miss breakpoints during initialization (e.g., `_Ready`).
+The plugin can register `DebugWaitAutoload` (**Editor Settings → Auto register DebugWait**, on by default).  
+Put **`DebugWait` at the top** of **Project → Project Settings → Autoload** if you use other autoloads.
 
 When the game starts:
 
-- Shows a **"Waiting for debugger..."** overlay
-- Automatically resumes once the debugger attaches
-- Press **ESC** to skip waiting
-- Times out after 30 seconds
+- **Main-thread wait** (default **12 s**, configurable as **Debug wait seconds**) before the rest of the scene tree loads — so breakpoints in `_Ready` / `_ready` can hit after you attach
+- **Window title** shows the countdown (check the running game window’s title bar). **Editor → Output** also prints seconds remaining
+- **Space** / **Esc** may not register until the engine pumps input; if nothing happens, let the countdown finish
+- Set **Debug wait seconds** to **0** to disable (not recommended for `_Ready` breakpoints with external attach)
+
+Increase **Debug wait seconds** if your IDE attach step is slow (e.g. Cursor).
 
 ## IDE Support
 

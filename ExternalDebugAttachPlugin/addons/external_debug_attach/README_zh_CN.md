@@ -33,13 +33,15 @@
 
 在 Editor → Editor Settings 中找到 "External Debug Attach" 設定：
 
-| 設定項               | 說明                                     |
-| -------------------- | ---------------------------------------- |
-| IDE Type             | 選擇 IDE：VSCode、Cursor 或 AntiGravity  |
-| VS Code Path         | VS Code 可執行檔路徑（留空自動偵測）     |
-| Cursor Path          | Cursor 可執行檔路徑（留空自動偵測）      |
-| AntiGravity Path     | AntiGravity 可執行檔路徑（留空自動偵測） |
-| Show Service Console | 顯示 Debug Attach Service 主控台視窗     |
+| 設定項                | 說明                                                       |
+| --------------------- | ---------------------------------------------------------- |
+| IDE Type              | 選擇 IDE：VSCode、Cursor 或 AntiGravity                    |
+| VS Code Path          | VS Code 可執行檔路徑（留空自動偵測）                       |
+| Cursor Path           | Cursor 可執行檔路徑（留空自動偵測）                        |
+| AntiGravity Path      | AntiGravity 可執行檔路徑（留空自動偵測）                   |
+| Show Service Console  | 顯示 Debug Attach Service 主控台視窗                       |
+| Auto register DebugWait | 註冊 `DebugWait` Autoload（建議開啟）                     |
+| Debug wait seconds    | 主執行緒阻塞秒數，主場景載入**之前**（預設 **12** 秒）     |
 
 ### 顯示 Service 主控台視窗
 
@@ -69,10 +71,9 @@
 2. 在 Godot Editor 的 toolbar 點擊 **🐞 Run + Attach Debug** (或按 `Alt+F5`)
 3. Plugin 會自動：
    - 啟動 Debug Attach Service（如果尚未運行）
-   - 執行專案
-   - 暫停遊戲等待 debugger（透過 DebugWaitAutoload）
+   - 執行專案（**DebugWaitAutoload** 會先阻塞場景樹，見下）
    - 偵測 Godot 遊戲程序 PID
-   - 啟動 IDE 並附加 debugger
+   - 啟動 IDE 並附加 debugger（遊戲視窗出現後仍可能需要數秒）
 
 ## 運作流程
 
@@ -84,20 +85,22 @@
    - 啟動 IDE 開啟工作區
    - 發送 F5 按鍵開始除錯
 3. **DebugWaitAutoload**（在遊戲程序中）：
-   - 使用視覺覆蓋層暫停遊戲
-   - 同步阻塞等待 debugger 附加
-   - debugger 連接後自動繼續
+   - 在**主執行緒**阻塞，讓主場景與 C# `_Ready` 在等候結束後才執行
+   - 在遊戲**視窗標題列**顯示倒數（此階段通常還畫不出第一幀，因此無法可靠顯示全螢幕文字覆蓋）
+   - **無法**偵測「偵錯器是否已附加」，只提供時間讓你在 IDE 完成 Attach
 
 ## DebugWaitAutoload
 
-Plugin 在啟用時會自動註冊 `DebugWaitAutoload`，確保不會錯過初始化時的斷點（如 `_Ready`）。
+啟用 **Auto register DebugWait** 時會註冊 `DebugWaitAutoload`。若專案還有其他 Autoload，請在 **Project → Project Settings → Autoload** 把 **`DebugWait` 排到最上面**。
 
 遊戲啟動時：
 
-- 顯示「Waiting for debugger...」覆蓋層
-- Debugger 附加後自動繼續
-- 按 **ESC** 可跳過等待
-- 超時 30 秒後自動繼續
+- **主執行緒等待**（預設 **12 秒**，於 **Debug wait seconds** 調整），其餘場景樹此時尚未載入，`_Ready` 斷點才有機會命中
+- **視窗標題列**會顯示倒數；**編輯器 Output** 也會每秒印出剩餘秒數
+- **空白鍵** / **Esc** 在阻塞階段未必能收到；若無反應，請等倒數結束
+- 設為 **0** 可關閉等待（外部 Attach 時不建議，`_Ready` 斷點容易失效）
+
+IDE Attach 較慢時（例如 Cursor）請**加大 Debug wait seconds**。
 
 ## IDE 支援
 
