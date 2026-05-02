@@ -25,6 +25,13 @@ public record AttachRequest
     [JsonPropertyName("workspacePath")]
     public string? WorkspacePath { get; init; }
 
+    /// <summary>
+    /// Max F5 rounds while verifying debugger attach on the game PID (from Godot Project Settings).
+    /// When null, <c>DEBUG_ATTACH_F5_ATTACH_CHECK_MAX</c> applies.
+    /// </summary>
+    [JsonPropertyName("f5AttachCheckMax")]
+    public int? F5AttachCheckMax { get; init; }
+
     [JsonPropertyName("timestamp")]
     public DateTimeOffset Timestamp { get; init; } = DateTimeOffset.UtcNow;
 }

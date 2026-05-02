@@ -16,6 +16,7 @@ const SETTING_ANTIGRAVITY_PATH := SETTING_PREFIX + "antigravity_path"
 const SETTING_SHOW_SERVICE_CONSOLE := SETTING_PREFIX + "show_service_console"
 const SETTING_AUTO_REGISTER_AUTOLOAD := SETTING_PREFIX + "auto_register_debugwait_autoload"
 const SETTING_DEBUG_WAIT_SECONDS := SETTING_PREFIX + "debug_wait_seconds"
+const SETTING_F5_ATTACH_CHECK_MAX := SETTING_PREFIX + "f5_attach_check_max"
 
 ## Legacy: Editor Settings (plugin ≤ 2.x) and ProjectSettings external_debug_attach/*
 const LEGACY_SETTING_PREFIX := "external_debug_attach/"
@@ -126,6 +127,9 @@ func _initialize_settings() -> void:
 	if not ProjectSettings.has_setting(SETTING_DEBUG_WAIT_SECONDS):
 		ProjectSettings.set_setting(SETTING_DEBUG_WAIT_SECONDS, 12.0)
 
+	if not ProjectSettings.has_setting(SETTING_F5_ATTACH_CHECK_MAX):
+		ProjectSettings.set_setting(SETTING_F5_ATTACH_CHECK_MAX, 12)
+
 	# Calling add_property_info on every plugin enable duplicates Dotnet → External Debug Attach in the tree.
 	if not Engine.has_meta(META_PROJECT_INFOS):
 		_register_all_project_property_infos()
@@ -223,6 +227,7 @@ func _register_all_project_property_infos() -> void:
 	_add_project_setting_info(SETTING_SHOW_SERVICE_CONSOLE, TYPE_BOOL, PROPERTY_HINT_NONE, "")
 	_add_project_setting_info(SETTING_AUTO_REGISTER_AUTOLOAD, TYPE_BOOL, PROPERTY_HINT_NONE, "")
 	_add_project_setting_info(SETTING_DEBUG_WAIT_SECONDS, TYPE_FLOAT, PROPERTY_HINT_RANGE, "0.0,60.0,0.1")
+	_add_project_setting_info(SETTING_F5_ATTACH_CHECK_MAX, TYPE_INT, PROPERTY_HINT_RANGE, "1,100,1")
 
 
 func _add_project_setting_info(name: String, type: int, hint: int, hint_string: String) -> void:
@@ -431,13 +436,20 @@ func _notify_service_async() -> void:
 		IdeType.AntiGravity:
 			editor = "antigravity"
 
+	var f5_max: int = int(ProjectSettings.get_setting(SETTING_F5_ATTACH_CHECK_MAX))
+	if f5_max < 1:
+		f5_max = 1
+	elif f5_max > 100:
+		f5_max = 100
+
 	var request := {
 		"type": "debug-attach-request",
 		"pid": 0,
 		"engine": "godot",
 		"editor": editor,
 		"workspacePath": ProjectSettings.globalize_path("res://"),
-		"idePath": _get_configured_ide_path(ide_type)
+		"idePath": _get_configured_ide_path(ide_type),
+		"f5AttachCheckMax": f5_max
 	}
 
 	var json := JSON.stringify(request)

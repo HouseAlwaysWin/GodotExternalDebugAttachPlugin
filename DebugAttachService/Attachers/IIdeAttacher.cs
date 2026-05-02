@@ -23,6 +23,9 @@ public interface IIdeAttacher
     /// <param name="pid">Process ID to attach to</param>
     /// <param name="idePath">Path to the IDE executable</param>
     /// <param name="workspacePath">Path to the workspace/solution</param>
+    /// <param name="f5AttachCheckMax">
+    /// Optional max F5 rounds when verifying debugger attach (overrides DEBUG_ATTACH_F5_ATTACH_CHECK_MAX env).
+    /// </param>
     /// <returns>Result of the attach operation</returns>
-    AttachResult Attach(int pid, string idePath, string workspacePath);
+    AttachResult Attach(int pid, string idePath, string workspacePath, int? f5AttachCheckMax = null);
 }

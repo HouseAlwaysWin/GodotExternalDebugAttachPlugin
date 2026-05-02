@@ -247,8 +247,8 @@ public class TcpAttachServer : IDisposable
         var result = attacher.Attach(
             pid,
             editorPath,
-            request.WorkspacePath ?? ""
-        );
+            request.WorkspacePath ?? "",
+            request.F5AttachCheckMax);
 
         return new AttachResponse
         {

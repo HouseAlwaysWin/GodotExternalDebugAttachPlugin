@@ -15,6 +15,7 @@ public class VSCodeAttacher : IIdeAttacher
 {
     private readonly Action<string> _log;
     private readonly Action<string> _logError;
+    private int? _f5AttachCheckMaxOverride;
 
     public VSCodeAttacher(Action<string>? log = null, Action<string>? logError = null)
     {
@@ -22,8 +23,9 @@ public class VSCodeAttacher : IIdeAttacher
         _logError = logError ?? ConsoleLog.WriteErrorLine;
     }
 
-    public AttachResult Attach(int pid, string idePath, string workspacePath)
+    public AttachResult Attach(int pid, string idePath, string workspacePath, int? f5AttachCheckMax = null)
     {
+        _f5AttachCheckMaxOverride = f5AttachCheckMax;
         try
         {
             // Validate IDE path
@@ -147,6 +149,10 @@ public class VSCodeAttacher : IIdeAttacher
         {
             _logError($"[VSCodeAttacher] Exception: {ex.Message}");
             return AttachResult.Fail($"Exception: {ex.Message}");
+        }
+        finally
+        {
+            _f5AttachCheckMaxOverride = null;
         }
     }
 
@@ -444,11 +450,31 @@ public class VSCodeAttacher : IIdeAttacher
         return true;
     }
 
-    private static int GetF5AttachVerifyMaxRounds()
+    /// <summary>
+    /// When true with F5-until-attached, skip title/workspace.json waits and shorten min IDE delay — attach probe drives success.
+    /// </summary>
+    private static bool GetMinimalPreF5WaitEnabled()
     {
+        var raw = Environment.GetEnvironmentVariable("DEBUG_ATTACH_MINIMAL_PRE_F5_WAIT")?.Trim();
+        if (string.IsNullOrEmpty(raw))
+            return true;
+        if (string.Equals(raw, "0", StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (string.Equals(raw, "false", StringComparison.OrdinalIgnoreCase))
+            return false;
+        return true;
+    }
+
+    private static bool UseFastPreF5Path() =>
+        GetMinimalPreF5WaitEnabled() && GetF5UntilDebuggerAttachedEnabled();
+
+    private int GetF5AttachVerifyMaxRounds()
+    {
+        if (_f5AttachCheckMaxOverride is { } fromRequest)
+            return Math.Clamp(fromRequest, 1, 100);
         var raw = Environment.GetEnvironmentVariable("DEBUG_ATTACH_F5_ATTACH_CHECK_MAX")?.Trim();
         if (!string.IsNullOrEmpty(raw) && int.TryParse(raw, out var n))
-            return Math.Clamp(n, 1, 40);
+            return Math.Clamp(n, 1, 100);
         return 12;
     }
 
@@ -507,9 +533,11 @@ public class VSCodeAttacher : IIdeAttacher
     private static int GetPreSendKeysDelayMs()
     {
         var raw = Environment.GetEnvironmentVariable("DEBUG_ATTACH_PRE_SENDKEYS_DELAY_MS")?.Trim();
-        if (string.IsNullOrEmpty(raw) || !int.TryParse(raw, out var ms))
-            return 2500;
-        return Math.Clamp(ms, 0, 30000);
+        if (!string.IsNullOrEmpty(raw) && int.TryParse(raw, out var ms))
+            return Math.Clamp(ms, 0, 30000);
+        if (UseFastPreF5Path())
+            return 600;
+        return 2500;
     }
 
     private static int GetMaxWaitForProcessMs()
@@ -525,6 +553,8 @@ public class VSCodeAttacher : IIdeAttacher
         var raw = Environment.GetEnvironmentVariable("DEBUG_ATTACH_MIN_IDE_MS")?.Trim();
         if (!string.IsNullOrEmpty(raw) && int.TryParse(raw, out var ms))
             return Math.Clamp(ms, 1000, 120000);
+        if (UseFastPreF5Path())
+            return wasAlreadyRunning ? 1500 : (isCursor ? 3500 : 3000);
         if (wasAlreadyRunning)
             return 6000;
         return isCursor ? 14000 : 10000;
@@ -535,6 +565,8 @@ public class VSCodeAttacher : IIdeAttacher
         var raw = Environment.GetEnvironmentVariable("DEBUG_ATTACH_IDE_TITLE_WAIT_MAX_MS")?.Trim();
         if (!string.IsNullOrEmpty(raw) && int.TryParse(raw, out var ms))
             return Math.Clamp(ms, 0, 120000);
+        if (UseFastPreF5Path())
+            return 0;
         if (wasAlreadyRunning)
             return 12000;
         return isCursor ? 45000 : 30000;
@@ -545,6 +577,8 @@ public class VSCodeAttacher : IIdeAttacher
         var raw = Environment.GetEnvironmentVariable("DEBUG_ATTACH_POST_READY_SETTLE_MS")?.Trim();
         if (!string.IsNullOrEmpty(raw) && int.TryParse(raw, out var ms))
             return Math.Clamp(ms, 0, 120000);
+        if (UseFastPreF5Path())
+            return 0;
         if (wasAlreadyRunning)
             return 2000;
         return isCursor ? 5500 : 4000;
@@ -564,7 +598,17 @@ public class VSCodeAttacher : IIdeAttacher
     {
         var maxMs = GetIdeTitleWaitMaxMs(wasAlreadyRunning, isCursor);
         if (maxMs <= 0)
+        {
+            if (UseFastPreF5Path())
+            {
+                _log(
+                    "[VSCodeAttacher] Skipping IDE ready wait / post-settle "
+                        + "(DEBUG_ATTACH_MINIMAL_PRE_F5_WAIT + F5-until-attached); using F5 retries + debugger probe."
+                );
+            }
+
             return;
+        }
 
         _log(
             $"[VSCodeAttacher] Waiting up to {maxMs}ms for {ideName} ready signal "
