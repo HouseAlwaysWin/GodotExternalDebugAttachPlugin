@@ -21,7 +21,8 @@
     <GodotAddonBinDir>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\ExternalDebugAttachPlugin\addons\external_debug_attach\bin'))</GodotAddonBinDir>
   </PropertyGroup>
 
-  <Target Name="CopyDebugAttachServiceToGodotAddon" AfterTargets="Build">
+  <!-- Skip copying when DebugAttachService.exe locks the addon bin (set SkipGodotAddonCopy=true). -->
+  <Target Name="CopyDebugAttachServiceToGodotAddon" AfterTargets="Build" Condition="'$(SkipGodotAddonCopy)' != 'true'">
     <MakeDir Directories="$(GodotAddonBinDir)" />
     <!-- Use TargetDir (trailing slash) so *.exe wildcards resolve; bare OutputPath can break globs. -->
     <ItemGroup>

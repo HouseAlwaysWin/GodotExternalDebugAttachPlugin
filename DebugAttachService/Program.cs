@@ -27,6 +27,16 @@ for (int i = 0; i < commandArgs.Length; i++)
         ConsoleLog.WriteLine("and triggers the appropriate IDE debugger to attach to the game process.");
         ConsoleLog.WriteLine();
         ConsoleLog.WriteLine("Environment (optional):");
+        ConsoleLog.WriteLine("  DEBUG_ATTACH_MAX_WAIT_PROCESS_MS=…  Max wait for IDE process (default 60000, 5–120000)");
+        ConsoleLog.WriteLine("  DEBUG_ATTACH_MIN_IDE_MS=…          Min wait after process exists before ready poll (overrides heuristics)");
+        ConsoleLog.WriteLine("  DEBUG_ATTACH_IDE_TITLE_WAIT_MAX_MS=…  Max wait for workspace.json notify or title (0=skip)");
+        ConsoleLog.WriteLine("  DEBUG_ATTACH_IDE_READY_POLL_MS=…      Title/storage re-check interval when waiting (default 250)");
+        ConsoleLog.WriteLine("  DEBUG_ATTACH_POST_READY_SETTLE_MS=…  After first ready signal, wait before SendKeys (cold Cursor default ~5500)");
+        ConsoleLog.WriteLine("  DEBUG_ATTACH_WORKSPACE_STORAGE_ROOT=…  Override path to …User\\workspaceStorage (Cursor/VS Code)");
+        ConsoleLog.WriteLine("  DEBUG_ATTACH_PRE_SENDKEYS_DELAY_MS=…  Extra delay before SendKeys (default 2500)");
+        ConsoleLog.WriteLine("  DEBUG_ATTACH_F5_UNTIL_ATTACHED=0         Disable: retry F5 until game PID has debugger (default on)");
+        ConsoleLog.WriteLine("  DEBUG_ATTACH_F5_ATTACH_CHECK_MAX=…    Max F5 rounds when until-attached (default 12)");
+        ConsoleLog.WriteLine("  DEBUG_ATTACH_F5_ATTACH_CHECK_DELAY_MS=… ms after each F5 before CheckRemoteDebuggerPresent (default 1800)");
         ConsoleLog.WriteLine("  DEBUG_ATTACH_TRY_CLI_DEBUG_START=1   Experimental: run --command before SendKeys");
         ConsoleLog.WriteLine("  DEBUG_ATTACH_SKIP_F5_FALLBACK=1      Skip SendKeys (attach will usually not start)");
         ConsoleLog.WriteLine("  DEBUG_ATTACH_START_DEBUG_KEYS=…    SendKeys for Start Debugging (default {F5}; e.g. {F8}, ^{F5})");

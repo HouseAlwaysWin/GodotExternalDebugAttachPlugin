@@ -188,4 +188,54 @@ internal static class WindowsForeground
 
         return TryForceForegroundWindow(bestHwnd);
     }
+
+    /// <summary>
+    /// True when any visible top-level window for <paramref name="processName"/> has <paramref name="substring"/> in its title
+    /// (used to wait until the IDE has opened the workspace before SendKeys).
+    /// </summary>
+    public static bool AnyIdeWindowTitleContains(string processName, string substring)
+    {
+        if (string.IsNullOrWhiteSpace(substring))
+            return false;
+
+        var needle = substring.Trim();
+        var validPids = new HashSet<int>();
+        foreach (var p in Process.GetProcessesByName(processName))
+        {
+            try
+            {
+                validPids.Add(p.Id);
+            }
+            finally
+            {
+                p.Dispose();
+            }
+        }
+
+        if (validPids.Count == 0)
+            return false;
+
+        var found = false;
+        EnumWindows((hWnd, _) =>
+        {
+            GetWindowThreadProcessId(hWnd, out uint windowPid);
+            if (!validPids.Contains((int)windowPid) || !IsWindowVisible(hWnd))
+                return true;
+
+            if (GetWindowTextLength(hWnd) < 1)
+                return true;
+
+            var sb = new StringBuilder(512);
+            _ = GetWindowText(hWnd, sb, 512);
+            if (sb.ToString().Contains(needle, StringComparison.OrdinalIgnoreCase))
+            {
+                found = true;
+                return false;
+            }
+
+            return true;
+        }, IntPtr.Zero);
+
+        return found;
+    }
 }

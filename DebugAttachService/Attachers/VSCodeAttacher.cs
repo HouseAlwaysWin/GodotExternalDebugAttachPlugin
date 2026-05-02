@@ -84,11 +84,10 @@ public class VSCodeAttacher : IIdeAttacher
             bool wasAlreadyRunning = existingPids.Count > 0;
 
             int waitedMs = 0;
-            int maxWaitMs = 25000; // Max 25 seconds
+            int maxWaitMs = GetMaxWaitForProcessMs();
             int intervalMs = 500;
-            // If IDE was already running, we need to wait for the workspace to reload
-            // If IDE is newly started, wait longer for full initialization
-            int minWaitMs = wasAlreadyRunning ? 6000 : 8000;
+            // Cold start: Electron needs much longer before F5 works; warm: shorter.
+            int minWaitMs = GetMinIdeProcessWaitMs(wasAlreadyRunning, isCursor);
             Process? ideProcess = null;
 
             while (waitedMs < maxWaitMs)
@@ -108,7 +107,7 @@ public class VSCodeAttacher : IIdeAttacher
                     // Wait enough time for IDE to fully load the workspace
                     if (waitedMs >= minWaitMs)
                     {
-                        _log($"[VSCodeAttacher] {ideName} ready after {waitedMs}ms (PID: {ideProcess.Id}, was running: {wasAlreadyRunning})");
+                        _log($"[VSCodeAttacher] {ideName} process found after {waitedMs}ms (PID: {ideProcess.Id}, was running: {wasAlreadyRunning})");
                         break;
                     }
                 }
@@ -121,10 +120,19 @@ public class VSCodeAttacher : IIdeAttacher
                 return AttachResult.Ok();
             }
 
+            // Step 2b: Wait until title or workspace.json indicates the folder opened, then settle (no public "ready for F5" API).
+            WaitForIdeReadyOrTimeout(
+                processName,
+                workspacePath,
+                workspaceFolderName,
+                ideName,
+                wasAlreadyRunning,
+                isCursor);
+
             // Step 3: Start debugging — SendKeys F5 (reliable on Windows); optional experimental CLI if env set
             if (OperatingSystem.IsWindows())
             {
-                SendDebugStartAsync(idePath, workspacePath, workspaceFolderName, ideProcess, ideName, processName)
+                SendDebugStartAsync(idePath, workspacePath, workspaceFolderName, ideProcess, ideName, processName, pid)
                     .GetAwaiter().GetResult();
             }
             else
@@ -152,7 +160,8 @@ public class VSCodeAttacher : IIdeAttacher
         string workspaceFolderName,
         Process ideProcess,
         string ideName,
-        string processName)
+        string processName,
+        int gamePid)
     {
         var tryCliExperiment = string.Equals(
             Environment.GetEnvironmentVariable("DEBUG_ATTACH_TRY_CLI_DEBUG_START"),
@@ -205,7 +214,7 @@ public class VSCodeAttacher : IIdeAttacher
 
         var keySpec = GetStartDebugSendKeysSpec(_log);
         _log($"[VSCodeAttacher] SendKeys — starting attach in {ideName} (SendKeys: {keySpec})…");
-        await SendF5KeyPressAsync(ideProcess, ideName, processName, workspaceFolderName, keySpec);
+        await SendF5KeyPressAsync(ideProcess, ideName, processName, workspaceFolderName, keySpec, gamePid);
     }
 
     /// <summary>
@@ -236,18 +245,110 @@ public class VSCodeAttacher : IIdeAttacher
         string ideName,
         string processName,
         string workspaceFolderName,
-        string sendKeysSpec)
+        string sendKeysSpec,
+        int gamePid)
     {
-        var preDelay = GetPreSendKeysDelayMs();
-        if (preDelay > 0)
+        var focusEditor = GetFocusEditorBeforeKeys();
+
+        if (GetF5UntilDebuggerAttachedEnabled()
+            && OperatingSystem.IsWindows()
+            && gamePid > 0)
         {
+            if (RemoteDebuggerProbe.TryQueryDebuggerAttached(gamePid, out var alreadyDebugging, out _)
+                && alreadyDebugging)
+            {
+                _log(
+                    $"[VSCodeAttacher] Game PID {gamePid} already has a debugger attached; skipping SendKeys."
+                );
+                return;
+            }
+
+            var preDelay = GetPreSendKeysDelayMs();
+            if (preDelay > 0)
+            {
+                _log(
+                    $"[VSCodeAttacher]   Waiting {preDelay}ms before keys (DEBUG_ATTACH_PRE_SENDKEYS_DELAY_MS)…"
+                );
+                await Task.Delay(preDelay);
+            }
+
+            var maxRounds = GetF5AttachVerifyMaxRounds();
+            var verifyDelayMs = GetF5AttachVerifyDelayMs();
+
             _log(
-                $"[VSCodeAttacher]   Waiting {preDelay}ms before keys (DEBUG_ATTACH_PRE_SENDKEYS_DELAY_MS)…"
+                $"[VSCodeAttacher] Will retry F5 until debugger attaches to game PID {gamePid} "
+                    + $"(max {maxRounds} tries, {verifyDelayMs}ms between send and check; "
+                    + "DEBUG_ATTACH_F5_UNTIL_ATTACHED / DEBUG_ATTACH_F5_ATTACH_CHECK_*)."
             );
-            await Task.Delay(preDelay);
+
+            for (var round = 1; round <= maxRounds; round++)
+            {
+                try
+                {
+                    await SendKeysOneRoundAsync(
+                        ideProcess,
+                        ideName,
+                        processName,
+                        workspaceFolderName,
+                        sendKeysSpec,
+                        focusEditor,
+                        round,
+                        maxRounds);
+                }
+                catch (Exception ex)
+                {
+                    _log($"[VSCodeAttacher]   FAIL — SendKeys round {round}: {ex.Message}");
+                }
+
+                try
+                {
+                    using var gp = Process.GetProcessById(gamePid);
+                    _ = gp.Id;
+                }
+                catch
+                {
+                    _logError($"[VSCodeAttacher] Game PID {gamePid} exited; stopping F5 retries.");
+                    return;
+                }
+
+                await Task.Delay(verifyDelayMs);
+
+                if (RemoteDebuggerProbe.TryQueryDebuggerAttached(gamePid, out var attached, out var qErr))
+                {
+                    if (attached)
+                    {
+                        _log(
+                            $"[VSCodeAttacher] Debugger attached to game PID {gamePid} after F5 round {round}/{maxRounds}."
+                        );
+                        return;
+                    }
+                }
+                else if (!string.IsNullOrEmpty(qErr))
+                {
+                    _log($"[VSCodeAttacher] Attach verify query failed: {qErr}");
+                }
+
+                if (round < maxRounds)
+                    _log($"[VSCodeAttacher] No debugger on game PID {gamePid} yet — sending F5 again…");
+            }
+
+            _log(
+                "[VSCodeAttacher] Max F5 attach attempts reached; debugger may still attach if Cursor was slow. "
+                    + "Increase DEBUG_ATTACH_F5_ATTACH_CHECK_MAX or DEBUG_ATTACH_F5_ATTACH_CHECK_DELAY_MS."
+            );
+            return;
         }
 
-        var focusEditor = GetFocusEditorBeforeKeys();
+        // Legacy: fixed repeat count without remote-debugger verification (or verify disabled / non-Windows).
+        var preDelayLegacy = GetPreSendKeysDelayMs();
+        if (preDelayLegacy > 0)
+        {
+            _log(
+                $"[VSCodeAttacher]   Waiting {preDelayLegacy}ms before keys (DEBUG_ATTACH_PRE_SENDKEYS_DELAY_MS)…"
+            );
+            await Task.Delay(preDelayLegacy);
+        }
+
         var sendCount = GetSendKeysRepeatCount();
         var delayBetweenSends = GetSendKeysDelayMs();
 
@@ -261,42 +362,17 @@ public class VSCodeAttacher : IIdeAttacher
 
         for (var i = 1; i <= sendCount; i++)
         {
-            _log($"[VSCodeAttacher]   Sending keys to {ideName} ({i}/{sendCount})…");
-
             try
             {
-                ideProcess.Refresh();
-
-                bool foregroundOk = false;
-                if (OperatingSystem.IsWindows())
-                {
-                    foregroundOk = WindowsForeground.TryActivateBestIdeWindow(
-                        processName,
-                        workspaceFolderName,
-                        out _
-                    );
-
-                    if (!foregroundOk)
-                        foregroundOk = WindowsForeground.TryActivateProcessWindows(ideProcess.Id);
-
-                    if (!foregroundOk)
-                    {
-                        _logError(
-                            "[VSCodeAttacher]   Could not force Cursor/IDE to foreground (Windows foreground rules). "
-                                + "Click the Cursor window once, then try attach again."
-                        );
-                    }
-                    else
-                    {
-                        _log($"[VSCodeAttacher]   IDE brought to foreground before SendKeys.");
-                    }
-
-                    await Task.Delay(250);
-                }
-
-                SendKeysSendWaitSta(focusEditor, sendKeysSpec);
-
-                _log($"[VSCodeAttacher]   OK — keypress {i}/{sendCount} sent to {ideName}.");
+                await SendKeysOneRoundAsync(
+                    ideProcess,
+                    ideName,
+                    processName,
+                    workspaceFolderName,
+                    sendKeysSpec,
+                    focusEditor,
+                    i,
+                    sendCount);
             }
             catch (Exception ex)
             {
@@ -308,6 +384,80 @@ public class VSCodeAttacher : IIdeAttacher
         }
 
         _log($"[VSCodeAttacher] Finished SendKeys for {ideName}.");
+    }
+
+    private async Task SendKeysOneRoundAsync(
+        Process ideProcess,
+        string ideName,
+        string processName,
+        string workspaceFolderName,
+        string sendKeysSpec,
+        bool focusEditor,
+        int index,
+        int maxIndex)
+    {
+        _log($"[VSCodeAttacher]   Sending keys to {ideName} ({index}/{maxIndex})…");
+
+        ideProcess.Refresh();
+
+        if (OperatingSystem.IsWindows())
+        {
+            var foregroundOk = WindowsForeground.TryActivateBestIdeWindow(
+                processName,
+                workspaceFolderName,
+                out _
+            );
+
+            if (!foregroundOk)
+                foregroundOk = WindowsForeground.TryActivateProcessWindows(ideProcess.Id);
+
+            if (!foregroundOk)
+            {
+                _logError(
+                    "[VSCodeAttacher]   Could not force Cursor/IDE to foreground (Windows foreground rules). "
+                        + "Click the Cursor window once, then try attach again."
+                );
+            }
+            else
+            {
+                _log($"[VSCodeAttacher]   IDE brought to foreground before SendKeys.");
+            }
+
+            await Task.Delay(250);
+        }
+
+        SendKeysSendWaitSta(focusEditor, sendKeysSpec);
+        _log($"[VSCodeAttacher]   OK — keypress {index}/{maxIndex} sent to {ideName}.");
+    }
+
+    private static bool GetF5UntilDebuggerAttachedEnabled()
+    {
+        var raw = Environment.GetEnvironmentVariable("DEBUG_ATTACH_F5_UNTIL_ATTACHED")?.Trim();
+        if (string.IsNullOrEmpty(raw))
+            return true;
+        if (string.Equals(raw, "0", StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (string.Equals(raw, "false", StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (string.Equals(raw, "no", StringComparison.OrdinalIgnoreCase))
+            return false;
+        return true;
+    }
+
+    private static int GetF5AttachVerifyMaxRounds()
+    {
+        var raw = Environment.GetEnvironmentVariable("DEBUG_ATTACH_F5_ATTACH_CHECK_MAX")?.Trim();
+        if (!string.IsNullOrEmpty(raw) && int.TryParse(raw, out var n))
+            return Math.Clamp(n, 1, 40);
+        return 12;
+    }
+
+    private static int GetF5AttachVerifyDelayMs()
+    {
+        var raw = Environment.GetEnvironmentVariable("DEBUG_ATTACH_F5_ATTACH_CHECK_DELAY_MS")?.Trim();
+        if (!string.IsNullOrEmpty(raw) && int.TryParse(raw, out var ms))
+            return Math.Clamp(ms, 200, 60000);
+        return 1800;
     }
 
     /// <summary>SendKeys requires STA; service entry is MTA.</summary>
@@ -358,8 +508,100 @@ public class VSCodeAttacher : IIdeAttacher
     {
         var raw = Environment.GetEnvironmentVariable("DEBUG_ATTACH_PRE_SENDKEYS_DELAY_MS")?.Trim();
         if (string.IsNullOrEmpty(raw) || !int.TryParse(raw, out var ms))
-            return 1200;
+            return 2500;
         return Math.Clamp(ms, 0, 30000);
+    }
+
+    private static int GetMaxWaitForProcessMs()
+    {
+        var raw = Environment.GetEnvironmentVariable("DEBUG_ATTACH_MAX_WAIT_PROCESS_MS")?.Trim();
+        if (!string.IsNullOrEmpty(raw) && int.TryParse(raw, out var ms))
+            return Math.Clamp(ms, 5000, 120000);
+        return 60000;
+    }
+
+    private static int GetMinIdeProcessWaitMs(bool wasAlreadyRunning, bool isCursor)
+    {
+        var raw = Environment.GetEnvironmentVariable("DEBUG_ATTACH_MIN_IDE_MS")?.Trim();
+        if (!string.IsNullOrEmpty(raw) && int.TryParse(raw, out var ms))
+            return Math.Clamp(ms, 1000, 120000);
+        if (wasAlreadyRunning)
+            return 6000;
+        return isCursor ? 14000 : 10000;
+    }
+
+    private static int GetIdeTitleWaitMaxMs(bool wasAlreadyRunning, bool isCursor)
+    {
+        var raw = Environment.GetEnvironmentVariable("DEBUG_ATTACH_IDE_TITLE_WAIT_MAX_MS")?.Trim();
+        if (!string.IsNullOrEmpty(raw) && int.TryParse(raw, out var ms))
+            return Math.Clamp(ms, 0, 120000);
+        if (wasAlreadyRunning)
+            return 12000;
+        return isCursor ? 45000 : 30000;
+    }
+
+    private static int GetPostReadySettleMs(bool wasAlreadyRunning, bool isCursor)
+    {
+        var raw = Environment.GetEnvironmentVariable("DEBUG_ATTACH_POST_READY_SETTLE_MS")?.Trim();
+        if (!string.IsNullOrEmpty(raw) && int.TryParse(raw, out var ms))
+            return Math.Clamp(ms, 0, 120000);
+        if (wasAlreadyRunning)
+            return 2000;
+        return isCursor ? 5500 : 4000;
+    }
+
+    /// <summary>
+    /// Poll until window title contains the workspace folder name <em>or</em> workspace.json registers this folder,
+    /// then wait extra time for extension host / UI (there is no supported external API for "F5 will work").
+    /// </summary>
+    private void WaitForIdeReadyOrTimeout(
+        string processName,
+        string workspacePath,
+        string workspaceFolderName,
+        string ideName,
+        bool wasAlreadyRunning,
+        bool isCursor)
+    {
+        var maxMs = GetIdeTitleWaitMaxMs(wasAlreadyRunning, isCursor);
+        if (maxMs <= 0)
+            return;
+
+        _log(
+            $"[VSCodeAttacher] Waiting up to {maxMs}ms for {ideName} ready signal "
+                + "(FileSystemWatcher on workspaceStorage + title poll; "
+                + "DEBUG_ATTACH_IDE_TITLE_WAIT_MAX_MS / DEBUG_ATTACH_IDE_READY_POLL_MS)…"
+        );
+
+        var pollMs = IdeReadyWait.GetReadyPollIntervalMs();
+        var ok = IdeReadyWait.WaitForFirstSignal(
+            processName,
+            workspacePath,
+            workspaceFolderName,
+            maxMs,
+            _log,
+            out _,
+            pollMs);
+
+        if (ok)
+        {
+            var settle = GetPostReadySettleMs(wasAlreadyRunning, isCursor);
+            if (settle > 0)
+            {
+                _log(
+                    $"[VSCodeAttacher] Post-ready settle {settle}ms before SendKeys "
+                        + "(extension host has no public event; DEBUG_ATTACH_POST_READY_SETTLE_MS)…"
+                );
+                Thread.Sleep(settle);
+            }
+
+            return;
+        }
+
+        _log(
+            $"[VSCodeAttacher] No ready signal within {maxMs}ms — SendKeys anyway; "
+                + "if attach fails, increase DEBUG_ATTACH_IDE_TITLE_WAIT_MAX_MS, DEBUG_ATTACH_POST_READY_SETTLE_MS, "
+                + "or DEBUG_ATTACH_MIN_IDE_MS."
+        );
     }
 
     private static bool GetFocusEditorBeforeKeys()
