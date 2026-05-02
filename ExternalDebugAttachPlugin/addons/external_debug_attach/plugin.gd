@@ -200,7 +200,7 @@ func _get_service_path() -> String:
 	
 	# Fallback: try development path
 	var project_path := ProjectSettings.globalize_path("res://")
-	var dev_path := project_path + "/../DebugAttachService/bin/Release/net8.0/DebugAttachService.exe"
+	var dev_path := project_path + "/../DebugAttachService/bin/Release/net8.0-windows/DebugAttachService.exe"
 	if FileAccess.file_exists(dev_path):
 		return dev_path
 	

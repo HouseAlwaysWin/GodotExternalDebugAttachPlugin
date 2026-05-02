@@ -5,7 +5,8 @@
       "name": ".NET Attach (Godot)",
       "type": "coreclr",
       "request": "attach",
-      "processId": "26268"
+      "processId": 25240,
+      "justMyCode": true
     }
   ]
 }

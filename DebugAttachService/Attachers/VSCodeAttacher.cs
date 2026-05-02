@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Windows.Forms;
 using CliWrap;
 using CliWrap.Buffered;
 
@@ -38,6 +39,9 @@ public class VSCodeAttacher : IIdeAttacher
             }
 
             _log($"[VSCodeAttacher] Workspace path: {workspacePath}");
+
+            var workspaceFolderName = Path.GetFileName(
+                workspacePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
 
             // Create .vscode directory if it doesn't exist
             var vscodePath = Path.Combine(workspacePath, ".vscode");
@@ -120,7 +124,8 @@ public class VSCodeAttacher : IIdeAttacher
             // Step 3: Start debugging — SendKeys F5 (reliable on Windows); optional experimental CLI if env set
             if (OperatingSystem.IsWindows())
             {
-                SendDebugStartAsync(idePath, workspacePath, ideProcess, ideName, processName).GetAwaiter().GetResult();
+                SendDebugStartAsync(idePath, workspacePath, workspaceFolderName, ideProcess, ideName, processName)
+                    .GetAwaiter().GetResult();
             }
             else
             {
@@ -141,7 +146,13 @@ public class VSCodeAttacher : IIdeAttacher
     /// SendKeys F5 after focusing the IDE — the reliable way to start attach. Optional <c>DEBUG_ATTACH_TRY_CLI_DEBUG_START=1</c>
     /// runs a non-functional-on-most-builds <c>--command</c> attempt first (extra noise / delay). Skip F5 with <c>DEBUG_ATTACH_SKIP_F5_FALLBACK=1</c>.
     /// </summary>
-    private async Task SendDebugStartAsync(string idePath, string workspacePath, Process ideProcess, string ideName, string processName)
+    private async Task SendDebugStartAsync(
+        string idePath,
+        string workspacePath,
+        string workspaceFolderName,
+        Process ideProcess,
+        string ideName,
+        string processName)
     {
         var tryCliExperiment = string.Equals(
             Environment.GetEnvironmentVariable("DEBUG_ATTACH_TRY_CLI_DEBUG_START"),
@@ -194,7 +205,7 @@ public class VSCodeAttacher : IIdeAttacher
 
         var keySpec = GetStartDebugSendKeysSpec(_log);
         _log($"[VSCodeAttacher] SendKeys — starting attach in {ideName} (SendKeys: {keySpec})…");
-        await SendF5KeyPressAsync(ideProcess, ideName, processName, keySpec);
+        await SendF5KeyPressAsync(ideProcess, ideName, processName, workspaceFolderName, keySpec);
     }
 
     /// <summary>
@@ -220,52 +231,72 @@ public class VSCodeAttacher : IIdeAttacher
         return "{F5}";
     }
 
-    private async Task SendF5KeyPressAsync(Process ideProcess, string ideName, string processName, string sendKeysSpec)
+    private async Task SendF5KeyPressAsync(
+        Process ideProcess,
+        string ideName,
+        string processName,
+        string workspaceFolderName,
+        string sendKeysSpec)
     {
-        const int sendCount = 1;
-        const int delayBetweenSends = 500;
+        var preDelay = GetPreSendKeysDelayMs();
+        if (preDelay > 0)
+        {
+            _log(
+                $"[VSCodeAttacher]   Waiting {preDelay}ms before keys (DEBUG_ATTACH_PRE_SENDKEYS_DELAY_MS)…"
+            );
+            await Task.Delay(preDelay);
+        }
 
-        var psLiteral = sendKeysSpec.Replace("'", "''");
+        var focusEditor = GetFocusEditorBeforeKeys();
+        var sendCount = GetSendKeysRepeatCount();
+        var delayBetweenSends = GetSendKeysDelayMs();
 
-        for (int i = 1; i <= sendCount; i++)
+        if (sendCount > 1)
+        {
+            _log(
+                $"[VSCodeAttacher]   Sending {sendCount}x with {delayBetweenSends}ms between "
+                    + "(DEBUG_ATTACH_SENDKEYS_COUNT / DEBUG_ATTACH_SENDKEYS_DELAY_MS)."
+            );
+        }
+
+        for (var i = 1; i <= sendCount; i++)
         {
             _log($"[VSCodeAttacher]   Sending keys to {ideName} ({i}/{sendCount})…");
 
             try
             {
                 ideProcess.Refresh();
+
+                bool foregroundOk = false;
                 if (OperatingSystem.IsWindows())
                 {
-                    WindowsForeground.TryActivateProcessWindows(ideProcess.Id);
-                    WindowsForeground.TryActivateAnyNamedProcess(processName);
-                    await Task.Delay(150);
-                }
+                    foregroundOk = WindowsForeground.TryActivateBestIdeWindow(
+                        processName,
+                        workspaceFolderName,
+                        out _
+                    );
 
-                var psCommand = $"Add-Type -AssemblyName Microsoft.VisualBasic; " +
-                    $"[Microsoft.VisualBasic.Interaction]::AppActivate({ideProcess.Id}); " +
-                    "Start-Sleep -Milliseconds 250; " +
-                    $"[Microsoft.VisualBasic.Interaction]::AppActivate({ideProcess.Id}); " +
-                    "Start-Sleep -Milliseconds 250; " +
-                    "Add-Type -AssemblyName System.Windows.Forms; " +
-                    $"[System.Windows.Forms.SendKeys]::SendWait('{psLiteral}')";
+                    if (!foregroundOk)
+                        foregroundOk = WindowsForeground.TryActivateProcessWindows(ideProcess.Id);
 
-                var result = await Cli.Wrap("powershell")
-                    .WithArguments(new[] { "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", psCommand })
-                    .WithValidation(CommandResultValidation.None)
-                    .ExecuteBufferedAsync();
-
-                if (result.ExitCode == 0)
-                {
-                    _log($"[VSCodeAttacher]   OK — keypress {i}/{sendCount} sent to {ideName}.");
-                }
-                else
-                {
-                    _log($"[VSCodeAttacher]   FAIL — PowerShell exit code {result.ExitCode}");
-                    if (!string.IsNullOrWhiteSpace(result.StandardError))
+                    if (!foregroundOk)
                     {
-                        _log($"[VSCodeAttacher] Error: {result.StandardError.Trim()}");
+                        _logError(
+                            "[VSCodeAttacher]   Could not force Cursor/IDE to foreground (Windows foreground rules). "
+                                + "Click the Cursor window once, then try attach again."
+                        );
                     }
+                    else
+                    {
+                        _log($"[VSCodeAttacher]   IDE brought to foreground before SendKeys.");
+                    }
+
+                    await Task.Delay(250);
                 }
+
+                SendKeysSendWaitSta(focusEditor, sendKeysSpec);
+
+                _log($"[VSCodeAttacher]   OK — keypress {i}/{sendCount} sent to {ideName}.");
             }
             catch (Exception ex)
             {
@@ -279,28 +310,89 @@ public class VSCodeAttacher : IIdeAttacher
         _log($"[VSCodeAttacher] Finished SendKeys for {ideName}.");
     }
 
+    /// <summary>SendKeys requires STA; service entry is MTA.</summary>
+    private static void SendKeysSendWaitSta(bool sendCtrl1FocusEditorFirst, string keys)
+    {
+        Exception? thrown = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                if (sendCtrl1FocusEditorFirst)
+                {
+                    SendKeys.SendWait("^1");
+                    Thread.Sleep(350);
+                }
+
+                SendKeys.SendWait(keys);
+            }
+            catch (Exception ex)
+            {
+                thrown = ex;
+            }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+        if (thrown != null)
+            throw thrown;
+    }
+
+    private static int GetSendKeysRepeatCount()
+    {
+        var raw = Environment.GetEnvironmentVariable("DEBUG_ATTACH_SENDKEYS_COUNT")?.Trim();
+        if (string.IsNullOrEmpty(raw) || !int.TryParse(raw, out var n))
+            return 1;
+        return Math.Clamp(n, 1, 5);
+    }
+
+    private static int GetSendKeysDelayMs()
+    {
+        var raw = Environment.GetEnvironmentVariable("DEBUG_ATTACH_SENDKEYS_DELAY_MS")?.Trim();
+        if (string.IsNullOrEmpty(raw) || !int.TryParse(raw, out var ms))
+            return 2000;
+        return Math.Clamp(ms, 100, 5000);
+    }
+
+    private static int GetPreSendKeysDelayMs()
+    {
+        var raw = Environment.GetEnvironmentVariable("DEBUG_ATTACH_PRE_SENDKEYS_DELAY_MS")?.Trim();
+        if (string.IsNullOrEmpty(raw) || !int.TryParse(raw, out var ms))
+            return 1200;
+        return Math.Clamp(ms, 0, 30000);
+    }
+
+    private static bool GetFocusEditorBeforeKeys()
+    {
+        var raw = Environment.GetEnvironmentVariable("DEBUG_ATTACH_FOCUS_EDITOR_BEFORE_KEYS")?.Trim();
+        if (string.IsNullOrEmpty(raw))
+            return true;
+        if (string.Equals(raw, "0", StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (string.Equals(raw, "false", StringComparison.OrdinalIgnoreCase))
+            return false;
+        return true;
+    }
+
     private void CreateLaunchJson(string launchJsonPath, int pid)
     {
-        var launchConfig = new
+        var launchConfig = new Dictionary<string, object?>
         {
-            version = "0.2.0",
-            configurations = new[]
+            ["version"] = "0.2.0",
+            ["configurations"] = new object[]
             {
-                new
+                new Dictionary<string, object?>
                 {
-                    name = ".NET Attach (Godot)",
-                    type = "coreclr",
-                    request = "attach",
-                    processId = pid.ToString()
+                    ["name"] = ".NET Attach (Godot)",
+                    ["type"] = "coreclr",
+                    ["request"] = "attach",
+                    ["processId"] = pid,
+                    ["justMyCode"] = true
                 }
             }
         };
 
-        var options = new JsonSerializerOptions
-        {
-            WriteIndented = true
-        };
-
+        var options = new JsonSerializerOptions { WriteIndented = true };
         var json = JsonSerializer.Serialize(launchConfig, options);
         File.WriteAllText(launchJsonPath, json);
     }
