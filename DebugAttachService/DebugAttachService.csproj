@@ -15,4 +15,23 @@
     <PackageReference Include="CliWrap" Version="3.10.0" />
   </ItemGroup>
 
+  <!-- After build, copy outputs into the Godot addon so local Debug uses the latest service without manual publish. -->
+  <PropertyGroup>
+    <GodotAddonBinDir>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\ExternalDebugAttachPlugin\addons\external_debug_attach\bin'))</GodotAddonBinDir>
+  </PropertyGroup>
+
+  <Target Name="CopyDebugAttachServiceToGodotAddon" AfterTargets="Build">
+    <MakeDir Directories="$(GodotAddonBinDir)" />
+    <!-- Use TargetDir (trailing slash) so *.exe wildcards resolve; bare OutputPath can break globs. -->
+    <ItemGroup>
+      <_ServiceBuildOutput Include="$(TargetDir)*.exe" />
+      <_ServiceBuildOutput Include="$(TargetDir)*.dll" />
+      <_ServiceBuildOutput Include="$(TargetDir)*.deps.json" />
+      <_ServiceBuildOutput Include="$(TargetDir)*.runtimeconfig.json" />
+      <_ServiceBuildOutput Include="$(TargetDir)*.pdb" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_ServiceBuildOutput)" DestinationFolder="$(GodotAddonBinDir)" SkipUnchangedFiles="true" />
+    <Message Text="[DebugAttachService] Copied build output to $(GodotAddonBinDir)" Importance="high" Condition="'@(_ServiceBuildOutput)' != ''" />
+  </Target>
+
 </Project>

@@ -25,6 +25,11 @@ for (int i = 0; i < commandArgs.Length; i++)
         Console.WriteLine();
         Console.WriteLine("The service listens for debug attach requests from Godot Editor Plugin");
         Console.WriteLine("and triggers the appropriate IDE debugger to attach to the game process.");
+        Console.WriteLine();
+        Console.WriteLine("Environment (optional):");
+        Console.WriteLine("  DEBUG_ATTACH_TRY_CLI_DEBUG_START=1   Experimental: run --command before SendKeys");
+        Console.WriteLine("  DEBUG_ATTACH_SKIP_F5_FALLBACK=1      Skip SendKeys (attach will usually not start)");
+        Console.WriteLine("  DEBUG_ATTACH_START_DEBUG_KEYS=…    SendKeys for Start Debugging (default {F5}; e.g. {F8}, ^{F5})");
         return 0;
     }
 }
