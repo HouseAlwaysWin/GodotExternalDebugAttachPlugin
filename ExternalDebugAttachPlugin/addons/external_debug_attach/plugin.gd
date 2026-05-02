@@ -69,16 +69,10 @@ func _enter_tree() -> void:
 	_button.shortcut = shortcut
 	_button.shortcut_in_tooltip = true
 
-	# Ensure service is running
-	_ensure_service_running()
+	# Do not start DebugAttachService or touch autoload here — only when the user runs
+	# "Run + Attach Debug" (see _on_button_pressed) so enabling the plugin stays lightweight.
 
-	# Register DebugWait Autoload only when enabled
-	if _is_auto_register_autoload_enabled():
-		_register_autoload()
-	else:
-		_unregister_autoload()
-
-	print("[ExternalDebugAttach] Ready with shortcut Alt+F5")
+	print("[ExternalDebugAttach] Ready (service & DebugWait start on Run + Attach / Alt+F5 only)")
 
 
 func _exit_tree() -> void:
@@ -308,10 +302,6 @@ func _get_service_path() -> String:
 	return service_path
 
 
-func _ensure_service_running() -> void:
-	_ensure_service_running_async()
-
-
 func _wait_until_service_listening(max_frames: int) -> bool:
 	for _i in range(max_frames):
 		var tcp := StreamPeerTCP.new()
@@ -379,6 +369,9 @@ func _ensure_service_running_async() -> bool:
 
 func _on_button_pressed() -> void:
 	print("[ExternalDebugAttach] Button pressed - Run + Attach Debug")
+	if _is_auto_register_autoload_enabled():
+		_register_autoload()
+
 	if not await _ensure_service_running_async():
 		printerr("[ExternalDebugAttach] Cannot run attach: service unavailable")
 		return
