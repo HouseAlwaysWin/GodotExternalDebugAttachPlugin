@@ -31,7 +31,7 @@
 
 ## 設定
 
-在 Editor → Editor Settings 中找到 "External Debug Attach" 設定：
+在 **Project** → **Project Settings** → **General** → **Dotnet** → **External Debug Attach**：
 
 | 設定項                | 說明                                                       |
 | --------------------- | ---------------------------------------------------------- |
@@ -47,9 +47,8 @@
 
 如果您想查看 Debug Attach Service 的執行日誌（用於除錯問題），可以啟用主控台視窗：
 
-1. 進入 **Editor** → **Editor Settings**
-2. 搜尋 **External Debug Attach**
-3. 將 **Show Service Console** 設為 **true**
+1. 進入 **Project** → **Project Settings** → **Dotnet** → **External Debug Attach**
+2. 將 **Show Service Console** 設為 **true**
 
 啟用後，每次按 Alt+F5 時會彈出一個 CMD 視窗，顯示：
 

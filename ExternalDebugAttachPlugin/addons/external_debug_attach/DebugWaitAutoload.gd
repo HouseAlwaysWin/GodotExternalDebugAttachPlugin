@@ -4,7 +4,8 @@ extends Node
 ## During a synchronous `_ready()` block the engine often does not paint the first frame yet,
 ## so Control overlays may never appear (gray/white window). Use window title + prints instead.
 
-const PROJECT_SETTING_DEBUG_WAIT_SECONDS := "external_debug_attach/debug_wait_seconds"
+const PROJECT_SETTING_DEBUG_WAIT_SECONDS := "dotnet/external_debug_attach/debug_wait_seconds"
+const LEGACY_DEBUG_WAIT := "external_debug_attach/debug_wait_seconds"
 
 @export var max_wait_seconds: float = 12.0
 
@@ -21,6 +22,8 @@ func _ready() -> void:
 
 	if ProjectSettings.has_setting(PROJECT_SETTING_DEBUG_WAIT_SECONDS):
 		max_wait_seconds = float(ProjectSettings.get_setting(PROJECT_SETTING_DEBUG_WAIT_SECONDS))
+	elif ProjectSettings.has_setting(LEGACY_DEBUG_WAIT):
+		max_wait_seconds = float(ProjectSettings.get_setting(LEGACY_DEBUG_WAIT))
 
 	if max_wait_seconds <= 0.0:
 		print("[DebugWait] Wait disabled (debug_wait_seconds <= 0)")

@@ -31,7 +31,7 @@ This plugin uses a **two-component architecture** to avoid C# assembly reload is
 
 ## Configuration
 
-Go to **Editor** → **Editor Settings** and find the "External Debug Attach" section:
+Go to **Project** → **Project Settings** → **General** → **Dotnet** → **External Debug Attach**:
 
 | Setting              | Description                                                 |
 | -------------------- | ----------------------------------------------------------- |
@@ -40,14 +40,15 @@ Go to **Editor** → **Editor Settings** and find the "External Debug Attach" se
 | Cursor Path          | Path to Cursor executable (leave empty to auto-detect)      |
 | AntiGravity Path     | Path to AntiGravity executable (leave empty to auto-detect) |
 | Show Service Console | Show Debug Attach Service console window (for debugging)    |
+| Auto register Debugwait Autoload | Register `DebugWait` autoload (recommended on)   |
+| Debug Wait Seconds  | Main-thread wait before the main scene loads (for `_Ready` breakpoints) |
 
 ### Show Service Console Window
 
 To view the Debug Attach Service logs (useful for troubleshooting), enable the console window:
 
-1. Go to **Editor** → **Editor Settings**
-2. Search for **External Debug Attach**
-3. Set **Show Service Console** to **true**
+1. Go to **Project** → **Project Settings** → **Dotnet** → **External Debug Attach**
+2. Set **Show Service Console** to **true**
 
 When enabled, pressing Alt+F5 will open a CMD window displaying:
 

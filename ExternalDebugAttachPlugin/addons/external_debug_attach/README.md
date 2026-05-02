@@ -31,7 +31,7 @@ This plugin uses a **two-component architecture** to avoid C# assembly reload is
 
 ## Configuration
 
-Go to **Editor** → **Editor Settings** and find the "External Debug Attach" section:
+Go to **Project** → **Project Settings** → **General** → **Dotnet** → **External Debug Attach**:
 
 | Setting                       | Description                                                          |
 | ----------------------------- | -------------------------------------------------------------------- |
@@ -47,9 +47,8 @@ Go to **Editor** → **Editor Settings** and find the "External Debug Attach" se
 
 To view the Debug Attach Service logs (useful for troubleshooting), enable the console window:
 
-1. Go to **Editor** → **Editor Settings**
-2. Search for **External Debug Attach**
-3. Set **Show Service Console** to **true**
+1. Go to **Project** → **Project Settings** → **Dotnet** → **External Debug Attach**
+2. Set **Show Service Console** to **true**
 
 When enabled, pressing Alt+F5 will open a CMD window displaying:
 
@@ -91,7 +90,7 @@ When enabled, pressing Alt+F5 will open a CMD window displaying:
 
 ## DebugWaitAutoload
 
-The plugin can register `DebugWaitAutoload` (**Editor Settings → Auto register DebugWait**, on by default).  
+The plugin can register `DebugWaitAutoload` (**Project Settings → Dotnet → Auto register Debugwait Autoload**, on by default).  
 Put **`DebugWait` at the top** of **Project → Project Settings → Autoload** if you use other autoloads.
 
 When the game starts:

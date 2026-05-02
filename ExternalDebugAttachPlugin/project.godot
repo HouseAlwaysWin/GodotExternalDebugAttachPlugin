@@ -26,11 +26,14 @@ DebugWait="res://addons/external_debug_attach/DebugWaitAutoload.gd"
 [dotnet]
 
 project/assembly_name="ExternalDebugAttachPluginDemo"
+external_debug_attach/debug_wait_seconds=10.0
+external_debug_attach/ide_type=1
+external_debug_attach/vscode_path=""
+external_debug_attach/cursor_path=""
+external_debug_attach/show_service_console=true
+external_debug_attach/auto_register_debugwait_autoload=true
+external_debug_attach/antigravity_path=""
 
 [editor_plugins]
 
 enabled=PackedStringArray("res://addons/external_debug_attach/plugin.cfg")
-
-[external_debug_attach]
-
-debug_wait_seconds=10.2
