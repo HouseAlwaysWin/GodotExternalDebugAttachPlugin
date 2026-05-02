@@ -17,8 +17,8 @@ public class VSCodeAttacher : IIdeAttacher
 
     public VSCodeAttacher(Action<string>? log = null, Action<string>? logError = null)
     {
-        _log = log ?? Console.WriteLine;
-        _logError = logError ?? Console.Error.WriteLine;
+        _log = log ?? ConsoleLog.WriteLine;
+        _logError = logError ?? ConsoleLog.WriteErrorLine;
     }
 
     public AttachResult Attach(int pid, string idePath, string workspacePath)

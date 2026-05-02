@@ -22,8 +22,8 @@ public class TcpAttachServer : IDisposable
     public TcpAttachServer(int port = DefaultPort, Action<string>? log = null, Action<string>? logError = null)
     {
         _port = port;
-        _log = log ?? Console.WriteLine;
-        _logError = logError ?? Console.Error.WriteLine;
+        _log = log ?? ConsoleLog.WriteLine;
+        _logError = logError ?? ConsoleLog.WriteErrorLine;
     }
 
     /// <summary>

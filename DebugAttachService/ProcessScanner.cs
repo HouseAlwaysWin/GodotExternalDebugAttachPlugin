@@ -13,7 +13,7 @@ public static class ProcessScanner
     /// <returns>Process ID, or -1 if not found</returns>
     public static int FindGodotProcessPid(Action<string>? log = null)
     {
-        log ??= Console.WriteLine;
+        log ??= ConsoleLog.WriteLine;
 
         try
         {
