@@ -31,7 +31,10 @@ const SERVICE_READY_WAIT_FRAMES := 300
 
 enum IdeType {VSCode, Cursor, AntiGravity}
 
-var _button: Button
+var _toolbar_box: HBoxContainer
+var _button_main: Button
+var _button_scene: Button
+var _scene_dialog: EditorFileDialog
 var _tcp_client: StreamPeerTCP
 var _service_process_id: int = -1
 ## Tracks whether we spawned the listener with a visible CMD window (cmd /c start); background PID alone is unreliable.
@@ -47,33 +50,50 @@ func _enter_tree() -> void:
 
 	_initialize_settings()
 
-	# Create button
-	_button = Button.new()
-	_button.tooltip_text = "Run + Attach Debug (Alt+F5)"
-	_button.pressed.connect(_on_button_pressed)
+	_toolbar_box = HBoxContainer.new()
+	_toolbar_box.add_theme_constant_override("separation", 2)
 
-	# Load icon
+	_button_main = Button.new()
+	_button_main.tooltip_text = "Run Main Scene + Attach Debug (Alt+F5)"
+	_button_main.pressed.connect(_on_button_pressed)
+
 	var icon = load("res://addons/external_debug_attach/attach_icon.svg")
 	if icon:
-		_button.icon = icon
+		_button_main.icon = icon
 	else:
-		_button.text = "▶ Attach"
+		_button_main.text = "▶ Attach"
 
-	add_control_to_container(CONTAINER_TOOLBAR, _button)
-
-	# Setup shortcut (Alt+F5)
-	var shortcut = Shortcut.new()
-	var input_event = InputEventKey.new()
+	var shortcut := Shortcut.new()
+	var input_event := InputEventKey.new()
 	input_event.keycode = KEY_F5
 	input_event.alt_pressed = true
 	shortcut.events = [input_event]
-	_button.shortcut = shortcut
-	_button.shortcut_in_tooltip = true
+	_button_main.shortcut = shortcut
+	_button_main.shortcut_in_tooltip = true
 
-	# Do not start DebugAttachService or touch autoload here — only when the user runs
-	# "Run + Attach Debug" (see _on_button_pressed) so enabling the plugin stays lightweight.
+	_toolbar_box.add_child(_button_main)
 
-	print("[ExternalDebugAttach] Ready (service & DebugWait start on Run + Attach / Alt+F5 only)")
+	_button_scene = Button.new()
+	_button_scene.tooltip_text = "Pick a scene, then Run + Attach Debug"
+	_button_scene.pressed.connect(_on_scene_attach_button_pressed)
+	var base_ctrl := get_editor_interface().get_base_control()
+	if base_ctrl.get_theme_icon(&"PlayScene", &"EditorIcons") != null:
+		_button_scene.icon = base_ctrl.get_theme_icon(&"PlayScene", &"EditorIcons")
+	else:
+		_button_scene.text = "Scene"
+	_toolbar_box.add_child(_button_scene)
+
+	add_control_to_container(CONTAINER_TOOLBAR, _toolbar_box)
+
+	_scene_dialog = EditorFileDialog.new()
+	_scene_dialog.title = "Run Scene + Attach Debug"
+	_scene_dialog.file_mode = EditorFileDialog.FILE_MODE_OPEN_FILE
+	_scene_dialog.access = EditorFileDialog.ACCESS_RESOURCES
+	_scene_dialog.add_filter("*.tscn", "Godot Scene")
+	_scene_dialog.file_selected.connect(Callable(self, &"_on_scene_selected_for_attach"))
+	add_child(_scene_dialog)
+
+	print("[ExternalDebugAttach] Ready (service & DebugWait start when you run / attach only)")
 
 
 func _exit_tree() -> void:
@@ -81,11 +101,22 @@ func _exit_tree() -> void:
 	if not _is_windows:
 		return
 
-	if _button:
-		_button.pressed.disconnect(_on_button_pressed)
-		remove_control_from_container(CONTAINER_TOOLBAR, _button)
-		_button.queue_free()
-		_button = null
+	if _button_main:
+		_button_main.pressed.disconnect(_on_button_pressed)
+	if _button_scene:
+		_button_scene.pressed.disconnect(_on_scene_attach_button_pressed)
+	if _scene_dialog:
+		var cb := Callable(self, &"_on_scene_selected_for_attach")
+		if _scene_dialog.file_selected.is_connected(cb):
+			_scene_dialog.file_selected.disconnect(cb)
+		_scene_dialog.queue_free()
+		_scene_dialog = null
+	if _toolbar_box:
+		remove_control_from_container(CONTAINER_TOOLBAR, _toolbar_box)
+		_toolbar_box.queue_free()
+		_toolbar_box = null
+	_button_main = null
+	_button_scene = null
 
 	if _tcp_client:
 		_tcp_client.disconnect_from_host()
@@ -380,12 +411,60 @@ func _on_button_pressed() -> void:
 	if not await _ensure_service_running_async():
 		printerr("[ExternalDebugAttach] Cannot run attach: service unavailable")
 		return
-	await _run_and_attach()
+	await _run_and_attach_main_scene()
 
 
-func _run_and_attach() -> void:
+func _on_scene_attach_button_pressed() -> void:
+	print("[ExternalDebugAttach] Scene attach — pick scene (editor Quick Open UI when available)")
 	var ed := get_editor_interface()
-	# If a game is already running, Godot spawns another EXE — taskbar fills with Godot icons.
+	# Same dialog as the built-in “Select Scene” / Ctrl+Alt+O-style quick open (Godot 4.4+).
+	if ed.has_method(&"popup_quick_open"):
+		ed.popup_quick_open(_on_scene_quick_open_result, [&"PackedScene"])
+	else:
+		_scene_dialog.popup_centered_ratio(0.75)
+
+
+## Called by EditorInterface.popup_quick_open (cancel passes "").
+func _on_scene_quick_open_result(path: String) -> void:
+	if path.is_empty():
+		return
+	# Engine invokes this synchronously; defer so async attach can run safely.
+	call_deferred(&"_prepare_and_attach_scene_async", path)
+
+
+func _prepare_and_attach_scene_async(scene_path: String) -> void:
+	await _prepare_and_attach_scene(scene_path)
+
+
+func _on_scene_selected_for_attach(scene_path: String) -> void:
+	await _prepare_and_attach_scene(scene_path)
+
+
+func _prepare_and_attach_scene(scene_path: String) -> void:
+	print("[ExternalDebugAttach] Scene chosen: ", scene_path)
+	if not scene_path.ends_with(".tscn"):
+		push_warning("[ExternalDebugAttach] Expected a .tscn file.")
+	if not ResourceLoader.exists(scene_path):
+		printerr("[ExternalDebugAttach] Scene not found: ", scene_path)
+		return
+
+	if _is_auto_register_autoload_enabled():
+		_register_autoload()
+
+	if not await _ensure_service_running_async():
+		printerr("[ExternalDebugAttach] Cannot run attach: service unavailable")
+		return
+
+	await _run_and_attach_with_scene_path(scene_path)
+
+
+func _run_and_attach_main_scene() -> void:
+	await _run_and_attach_with_scene_path("")
+
+
+## If scene_path is empty, runs the main scene; otherwise runs that scene file via EditorInterface.play_custom_scene.
+func _run_and_attach_with_scene_path(scene_path: String) -> void:
+	var ed := get_editor_interface()
 	if ed.has_method(&"is_playing") and ed.is_playing():
 		print("[ExternalDebugAttach] Stopping previous run (avoids multiple game windows on the taskbar).")
 		ed.stop_playing_scene()
@@ -395,11 +474,13 @@ func _run_and_attach() -> void:
 			guard += 1
 		await get_tree().create_timer(0.2).timeout
 
-	# Step 1: Run the project
-	ed.play_main_scene()
-	print("[ExternalDebugAttach] Project started")
+	if scene_path.is_empty():
+		ed.play_main_scene()
+		print("[ExternalDebugAttach] Main scene started")
+	else:
+		ed.play_custom_scene(scene_path)
+		print("[ExternalDebugAttach] Custom scene started: ", scene_path)
 
-	# Step 2: Notify Service to do the attach (Service handles everything)
 	await _notify_service_async()
 
 
